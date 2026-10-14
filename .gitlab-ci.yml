@@ -1,0 +1,134 @@
+include:
+  - project: 'rndml-public/devops/job-templates'
+    file:
+      - '.nodejs-templates.yml'
+      - '.deploy.yml'
+  - '.deploy.yml'
+
+variables:
+  # как в .npmrc проекта (npm-proxy может отдавать другой индекс и ломать npm ci)
+  NPM_REGISTRY: https://nexus.sberdevices.ru/repository/Npm/
+  # postinstall → prisma generate требует DB_URL (prisma.config.ts), но к БД не подключается.
+  # Реальный DB_URL подставляется из Vault при деплое.
+  DB_URL: "postgresql://build:build@localhost:5432/build?schema=public"
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - node_modules/
+    - .npm/
+  policy: pull-push
+
+stages:
+  - prepare
+  - build
+  - test
+  - pack
+  - deploy
+
+.rules:
+  rules_main:
+    - if: $CI_COMMIT_BRANCH == 'develop'
+    - if: $CI_COMMIT_BRANCH == 'main'
+
+get_version:
+  extends: .version
+  rules:
+    - !reference [.rules, rules_main]
+
+install_deps:
+  stage: build
+  tags:
+    - d-rndml-build
+  image: registry.sberdevices.ru/rndml/devops/dockerfiles/nodejs-runtime-24:24.13
+  rules:
+    - !reference [.rules, rules_main]
+  script:
+    - |
+      if [[ $NPM_REGISTRY != "" ]]; then
+        npm config set registry $NPM_REGISTRY
+        echo "SET registry - $NPM_REGISTRY"
+      fi
+    - export NODE_OPTIONS="--max-old-space-size=8192"
+    - npm ci --ignore-scripts --no-audit --fetch-retries=8 --fetch-retry-factor=2 --fetch-retry-mintimeout=30000 --fetch-retry-maxtimeout=180000 || npm ci --ignore-scripts --no-audit
+  artifacts:
+    paths:
+      - node_modules/
+
+prisma_generate:
+  stage: build
+  tags:
+    - kube-stage
+  image: registry.sberdevices.ru/rndml/devops/dockerfiles/nodejs-runtime-24:24.13
+  needs:
+    - install_deps
+  dependencies:
+    - install_deps
+  rules:
+    - !reference [.rules, rules_main]
+  script:
+    - npx prisma generate
+  artifacts:
+    paths:
+      - node_modules/
+      - src/generated/prisma/
+
+build:
+  stage: build
+  tags:
+    - d-rndml-build
+  image: registry.sberdevices.ru/rndml/devops/dockerfiles/nodejs-runtime-24:24.13
+  needs:
+    - install_deps
+    - prisma_generate
+  dependencies:
+    - install_deps
+    - prisma_generate
+  rules:
+    - !reference [.rules, rules_main]
+  script:
+    # npm ci skips postinstall; preserve the KafkaJS fix in the packaged dependencies.
+    # Prisma is generated separately on kube-stage above.
+    - node scripts/patch-kafkajs.cjs
+    - npx nest build
+  artifacts:
+    paths:
+      - dist/
+      - node_modules/
+      - src/generated/prisma/
+
+check_lint:
+  stage: test
+  extends: .linter
+  tags:
+    - d-rndml-build
+  image: registry.sberdevices.ru/rndml/devops/dockerfiles/nodejs-runtime-24:24.13
+  dependencies:
+    - build
+  script:
+    - npm run lint
+  rules:
+    - !reference [.rules, rules_main]
+  allow_failure: true
+
+check_test:
+  stage: test
+  tags:
+    - p-rndml-build
+  image: registry.sberdevices.ru/rndml/devops/dockerfiles/nodejs-runtime-24:24.13
+  dependencies:
+    - build
+  script:
+    - npm run test -- --passWithNoTests
+  rules:
+    - !reference [.rules, rules_main]
+  allow_failure: true
+
+docker_kaniko:
+  stage: pack
+  extends: .kaniko
+  dependencies:
+    - get_version
+    - build
+  rules:
+    - !reference [.rules, rules_main]

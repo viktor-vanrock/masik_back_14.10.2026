@@ -1,0 +1,67 @@
+enum ConversationStatus {
+  active
+  awaiting_choice
+  generating
+  completed
+  abandoned
+}
+
+enum ConversationIntent {
+  find_existing
+  create_new
+}
+
+enum MessageRole {
+  agent
+  user
+}
+
+enum MessageKind {
+  question
+  option
+  text
+  recommendation_selected
+  recommendation_rejected
+  result
+}
+
+model Conversation {
+  id     String              @id @default(uuid()) @db.Uuid
+  userId String              @map("user_id") @db.VarChar(160)
+  status ConversationStatus  @default(active)
+  intent ConversationIntent?
+  agentContext Json? @map("agent_context") @db.JsonB
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  messages               Message[]
+  recommendations        Recommendation[]
+  recommendationRequests RecommendationRequest[]
+  hypothesisGenerations  HypothesisGeneration[]
+  catalogSubmission      CatalogEntry?           @relation("CatalogEntrySourceConversation")
+
+  @@index([userId])
+  @@map("conversations")
+}
+
+model Message {
+  id String @id @default(uuid()) @db.Uuid
+
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role MessageRole
+  kind MessageKind
+
+  content  String  @db.Text
+  optionId String? @map("option_id") @db.VarChar(255)
+  options  Json?   @db.JsonB
+  interviewState Json? @map("interview_state") @db.JsonB
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("messages")
+}

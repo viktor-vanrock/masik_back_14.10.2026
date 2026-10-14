@@ -1,0 +1,57 @@
+replicaCount: 1
+
+# Общий redis-кэш для benchmark-catalog-back и agent-bench-factory.
+# Отдельный под/сервис (не sidecar), т.к. используется двумя разными сервисами —
+# sidecar в одном из них привязал бы жизненный цикл общего кэша к чужому деплою.
+image:
+  repository: registry.sberdevices.ru/rndml/devops/dockerfiles/redis
+  pullPolicy: IfNotPresent
+  tag: "7.4-alpine"
+  command: ["sh", "-c"]
+  args:
+    - '. /vault/secrets/config && exec redis-server --requirepass "$REDIS_PASSWORD" --maxmemory 100mb --maxmemory-policy allkeys-lru --save "" --appendonly no'
+
+imagePullSecrets:
+  - name: gitlab-registry-secret
+  - name: dockerfiles-registry-pull
+
+serviceAccount:
+  create: false
+  automount: true
+  annotations: {}
+  name: 'vault'
+
+podAnnotations:
+  vault.hashicorp.com/agent-inject: 'true'
+  vault.hashicorp.com/agent-inject-token: 'true'
+  vault.hashicorp.com/agent-pre-populate-only: 'true'
+  vault.hashicorp.com/agent-inject-secret-config: 'rndbtoc/benchmark-catalog-back'
+  vault.hashicorp.com/role: 'd-rndbtoc'
+  vault.hashicorp.com/agent-inject-template-config: |
+    {{- with secret "rndbtoc/benchmark-catalog-back" -}}
+    {{ range $k, $v := .Data.data }}export {{ $k }}="$(printf '%s' '{{ printf "%v" $v | base64Encode }}' | base64 -d)"
+    {{ end }}{{- end -}}
+
+service:
+  enabled: true
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+      protocol: TCP
+      targetPort: 6379
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+livenessProbe:
+  tcpSocket:
+    port: 6379
+readinessProbe:
+  tcpSocket:
+    port: 6379

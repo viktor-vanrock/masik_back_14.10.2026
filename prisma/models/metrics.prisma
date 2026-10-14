@@ -1,0 +1,156 @@
+model MetricPriorityLookup {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(64)
+  name String @db.VarChar(128)
+
+  description String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  metrics MetricDefinition[]
+
+  @@map("metric_priority_lookups")
+}
+
+model MetricDirectionLookup {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(64)
+  name String @db.VarChar(128)
+
+  description String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  metrics MetricDefinition[]
+
+  @@map("metric_direction_lookups")
+}
+
+model Model {
+  id String @id @db.VarChar(160)
+
+  name         String  @db.VarChar(255)
+  provider     String? @db.VarChar(255)
+  isOpenSource Boolean @default(false) @map("is_open_source")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  metricResults    MetricResult[]
+  metricUploadRows MetricUploadRow[]
+
+  @@index([provider])
+  @@map("models")
+}
+
+model MetricDefinition {
+  id String @id @default(uuid()) @db.Uuid
+
+  name        String  @unique @db.VarChar(255)
+  displayName String? @map("display_name") @db.VarChar(255)
+
+  priorityId String               @map("priority_id") @db.Uuid
+  priority   MetricPriorityLookup @relation(fields: [priorityId], references: [id], onDelete: Restrict)
+
+  directionId String                @map("direction_id") @db.Uuid
+  direction   MetricDirectionLookup @relation(fields: [directionId], references: [id], onDelete: Restrict)
+
+  minValue    Decimal? @map("min_value") @db.Decimal(12, 6)
+  maxValue    Decimal? @map("max_value") @db.Decimal(12, 6)
+  targetValue Decimal? @map("target_value") @db.Decimal(12, 6)
+
+  metadata Json @default("{}") @db.JsonB
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  results    MetricResult[]
+  uploadRows MetricUploadRow[]
+
+  @@index([priorityId])
+  @@index([directionId])
+  @@map("metric_definitions")
+}
+
+model MetricResult {
+  id String @id @default(uuid()) @db.Uuid
+
+  // External aggregate identifiers. Result history is Catalog-owned and must
+  // survive source-service lifecycle changes.
+  benchmarkId String @map("benchmark_id") @db.VarChar(160)
+
+  testId String @map("test_id") @db.VarChar(160)
+
+  metricId String           @map("metric_id") @db.Uuid
+  metric   MetricDefinition @relation(fields: [metricId], references: [id], onDelete: Restrict)
+
+  modelId String @map("model_id") @db.VarChar(160)
+  model   Model  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  value    Decimal @db.Decimal(14, 6)
+  rawValue String? @map("raw_value") @db.VarChar(255)
+
+  obtainedAt DateTime @default(now()) @map("obtained_at") @db.Timestamptz(6)
+
+  importSource     String? @map("import_source") @db.VarChar(500)
+  rawModelName     String? @map("raw_model_name") @db.VarChar(500)
+  rawBenchmarkName String? @map("raw_benchmark_name") @db.VarChar(500)
+  rawTestName      String? @map("raw_test_name") @db.VarChar(500)
+  rawMetricName    String? @map("raw_metric_name") @db.VarChar(255)
+
+  metadata Json @default("{}") @db.JsonB
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  uploadRows MetricUploadRow[]
+
+  @@index([benchmarkId, testId, metricId, modelId, obtainedAt])
+  @@map("metric_results")
+}
+
+model MetricUploadRow {
+  id String @id @default(uuid()) @db.Uuid
+
+  modelId      String? @map("model_id") @db.VarChar(160)
+  model        Model?  @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  rawModelName String  @map("raw_model_name") @db.VarChar(500)
+
+  // Benchmark/Test are owned by benchmark-service. Import staging keeps their
+  // resolved identifiers without cross-service foreign keys.
+  benchmarkId      String? @map("benchmark_id") @db.VarChar(160)
+  rawBenchmarkName String     @map("raw_benchmark_name") @db.VarChar(500)
+
+  testId      String? @map("test_id") @db.VarChar(160)
+  rawTestName String         @map("raw_test_name") @db.VarChar(500)
+
+  rawSubsampleName String? @map("raw_subsample_name") @db.VarChar(500)
+
+  metricId      String?           @map("metric_id") @db.Uuid
+  metric        MetricDefinition? @relation(fields: [metricId], references: [id], onDelete: SetNull)
+  rawMetricName String            @map("raw_metric_name") @db.VarChar(255)
+
+  metricValue    Decimal @map("metric_value") @db.Decimal(14, 6)
+  rawMetricValue String? @map("raw_metric_value") @db.VarChar(255)
+
+  obtainedAt DateTime @map("obtained_at") @db.Timestamptz(6)
+
+  metricResultId String?       @map("metric_result_id") @db.Uuid
+  metricResult   MetricResult? @relation(fields: [metricResultId], references: [id], onDelete: SetNull)
+
+  importBatchId   String? @map("import_batch_id") @db.VarChar(255)
+  sourceRowNumber Int?    @map("source_row_number")
+  importSource    String? @map("import_source") @db.VarChar(500)
+
+  rawPayload Json @default("{}") @map("raw_payload") @db.JsonB
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([modelId, benchmarkId, testId, metricId, obtainedAt], map: "metric_upload_rows_lookup_idx")
+  @@index([rawModelName, rawBenchmarkName, rawTestName, rawMetricName])
+  @@index([importBatchId, sourceRowNumber])
+  @@map("metric_upload_rows")
+}

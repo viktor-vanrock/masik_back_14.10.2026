@@ -1,0 +1,92 @@
+deploy_dev:
+  extends: .kube_deploy
+  stage: deploy
+  tags:
+    - kubernetes-std
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'develop'
+  when: manual
+  variables:
+    ENVIRONMENT: develop
+    APP_NAME: benchmark-catalog-back
+    APP_NAMESPACE: d-rndbtoc-projects
+    CHART_DIR: ./helm
+    CHART_NAME: "."
+    CHART_REF: "master"
+    CHART_REPO: https://gitlab-ci-token:$CI_JOB_TOKEN@git.sberdevices.ru/rndml/devops/helm-template.git
+    CHART_VALUES: advosd-benchmark-catalog-back-dev
+    VALUES_PATH: envs/advosd-benchmark-catalog-back-dev.yml
+    CI_PROJECT_NAMESPACE: rndbtoc/benchmark-catalog
+    OC_SERVER: "https://api.advosd.sberdevices.ru:6443"
+    OC_TOKEN: $OC_TOKEN
+
+deploy_redis_dev:
+  extends: .kube_deploy
+  stage: deploy
+  tags:
+    - kubernetes-std
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'develop'
+  when: manual
+  variables:
+    ENVIRONMENT: develop
+    APP_NAME: benchmark-catalog-redis
+    APP_NAMESPACE: d-rndbtoc-projects
+    # .kube_deploy всегда передаёт --set image.tag=$VERSION, а $VERSION по умолчанию
+    # берётся из версии сборки benchmark-catalog-back (version.txt) — фиксируем тег
+    # стороннего redis-образа явно, иначе он затирается версией приложения.
+    VERSION_IMAGE: "7.4-alpine"
+    CHART_DIR: ./helm
+    CHART_NAME: "."
+    CHART_REF: "master"
+    CHART_REPO: https://gitlab-ci-token:$CI_JOB_TOKEN@git.sberdevices.ru/rndml/devops/helm-template.git
+    CHART_VALUES: advosd-benchmark-catalog-redis-dev
+    VALUES_PATH: envs/advosd-benchmark-catalog-redis-dev.yml
+    CI_PROJECT_NAMESPACE: rndbtoc/benchmark-catalog
+    OC_SERVER: "https://api.advosd.sberdevices.ru:6443"
+    OC_TOKEN: $OC_TOKEN
+
+deploy_prod:
+  extends: .kube_deploy
+  stage: deploy
+  tags:
+    - p-deployer
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main'
+  when: manual
+  variables:
+    ENVIRONMENT: production
+    APP_NAME: benchmark-catalog-back
+    APP_NAMESPACE: p-rndbtoc-projects
+    CHART_DIR: ./helm
+    CHART_NAME: "."
+    CHART_REF: "master"
+    CHART_REPO: https://gitlab-ci-token:$CI_JOB_TOKEN@git.sberdevices.ru/rndml/devops/helm-template.git
+    CHART_VALUES: advosp-benchmark-catalog-back-prod
+    VALUES_PATH: envs/advosp-benchmark-catalog-back-prod.yml
+    CI_PROJECT_NAMESPACE: rndbtoc/benchmark-catalog
+    OC_SERVER: "https://api.advosp.sberdevices.ru:6443"
+    OC_TOKEN: $OC_TOKEN
+
+deploy_redis_prod:
+  extends: .kube_deploy
+  stage: deploy
+  tags:
+    - p-deployer
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main'
+  when: manual
+  variables:
+    ENVIRONMENT: production
+    APP_NAME: benchmark-catalog-redis
+    APP_NAMESPACE: p-rndbtoc-projects
+    VERSION_IMAGE: "7.4-alpine"
+    CHART_DIR: ./helm
+    CHART_NAME: "."
+    CHART_REF: "master"
+    CHART_REPO: https://gitlab-ci-token:$CI_JOB_TOKEN@git.sberdevices.ru/rndml/devops/helm-template.git
+    CHART_VALUES: advosp-benchmark-catalog-redis-prod
+    VALUES_PATH: envs/advosp-benchmark-catalog-redis-prod.yml
+    CI_PROJECT_NAMESPACE: rndbtoc/benchmark-catalog
+    OC_SERVER: "https://api.advosp.sberdevices.ru:6443"
+    OC_TOKEN: $OC_TOKEN

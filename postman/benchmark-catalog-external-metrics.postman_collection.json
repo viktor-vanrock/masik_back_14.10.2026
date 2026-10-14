@@ -1,0 +1,986 @@
+{
+  "info": {
+    "_postman_id": "f71f7288-ea02-4666-a458-156006a35f1b",
+    "name": "Benchmark Catalog — External Metrics API E2E",
+    "description": "E2E-сценарий для Vault-backed External Metrics API. Запускайте коллекцию целиком через Collection Runner по порядку. Требуются работающие PostgreSQL, Vault Transit, backend, ADMIN/SUPERUSER и хотя бы один активный benchmark test в БД.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 — Администратор и API keys",
+      "item": [
+        {
+          "name": "Login admin → сохранить JWT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Есть access_token', () => pm.expect(json.access_token).to.be.a('string').and.not.empty);",
+                  "pm.environment.set('accessToken', json.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Создать ключ с полным доступом к метрикам",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/external-api/api-keys",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"postman-external-metrics-full-{{$timestamp}}\",\n  \"description\": \"Temporary E2E key for External Metrics API\",\n  \"scopes\": [\n    \"benchmark-tests:read\",\n    \"metric-definitions:read\",\n    \"metric-definitions:write\",\n    \"models:read\",\n    \"models:write\",\n    \"metric-results:read\",\n    \"metric-results:write\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Raw API key возвращён один раз', () => pm.expect(json.apiKey).to.match(/^bcb_[a-f0-9]{16}_[A-Za-z0-9_-]{43}$/));",
+                  "pm.test('Все write scopes выданы', () => {",
+                  "  pm.expect(json.scopes).to.include('metric-definitions:write');",
+                  "  pm.expect(json.scopes).to.include('models:write');",
+                  "  pm.expect(json.scopes).to.include('metric-results:write');",
+                  "});",
+                  "pm.environment.set('externalMetricsApiKey', json.apiKey);",
+                  "pm.environment.set('externalMetricsApiKeyId', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Создать read-only ключ",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/external-api/api-keys",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"postman-external-metrics-readonly-{{$timestamp}}\",\n  \"description\": \"Temporary read-only E2E key\",\n  \"scopes\": [\n    \"benchmark-tests:read\",\n    \"metric-definitions:read\",\n    \"models:read\",\n    \"metric-results:read\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('externalMetricsReadOnlyApiKey', json.apiKey);",
+                  "pm.environment.set('externalMetricsReadOnlyApiKeyId', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Неизвестный scope отклоняется",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/external-api/api-keys",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"postman-invalid-scope-{{$timestamp}}\",\n  \"scopes\": [\"metrics:destroy-everything\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Найти test и создать metric definition",
+      "item": [
+        {
+          "name": "Найти benchmark test → сохранить testId",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/benchmark-tests/search",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pagination\": {\n    \"page\": 1,\n    \"limit\": 1\n  },\n  \"sort\": {\n    \"column\": \"createdAt\",\n    \"direction\": \"desc\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('В БД есть хотя бы один активный benchmark test', () => {",
+                  "  pm.expect(json.data, 'Сначала импортируйте каталог/создайте benchmark test').to.be.an('array').and.not.empty;",
+                  "});",
+                  "pm.environment.set('externalMetricTestId', json.data[0].id);",
+                  "pm.environment.set('externalMetricBenchmarkId', json.data[0].benchmark.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Получить priorities → сохранить id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metrics/lookups/priorities"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Есть priority lookup', () => pm.expect(json).to.be.an('array').and.not.empty);",
+                  "const selected = json.find(x => x.code === 'primary') || json[0];",
+                  "pm.environment.set('externalMetricPriorityId', selected.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Получить directions → сохранить id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metrics/lookups/directions"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Есть direction lookup', () => pm.expect(json).to.be.an('array').and.not.empty);",
+                  "const selected = json.find(x => x.code === 'higher_is_better') || json[0];",
+                  "pm.environment.set('externalMetricDirectionId', selected.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Создать metric definition через External API",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metrics",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{externalMetricName}}\",\n  \"displayName\": \"Postman External Accuracy\",\n  \"priorityId\": \"{{externalMetricPriorityId}}\",\n  \"directionId\": \"{{externalMetricDirectionId}}\",\n  \"minValue\": 0,\n  \"maxValue\": 1,\n  \"targetValue\": 0.9,\n  \"evaluationLogic\": \"correct / total\",\n  \"metadata\": {\n    \"source\": \"postman-external-metrics-e2e\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('externalMetricName', `postman_external_accuracy_${Date.now()}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Metric definition создана', () => {",
+                  "  pm.expect(json.id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.name).to.eql(pm.environment.get('externalMetricName'));",
+                  "});",
+                  "pm.environment.set('externalMetricDefinitionId', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Получить созданную metric definition",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metrics/{{externalMetricDefinitionId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Вернулась созданная metric definition', () => pm.expect(json.id).to.eql(pm.environment.get('externalMetricDefinitionId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Список metric definitions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metrics?page=1&limit=20&search={{externalMetricName}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Созданная metric definition есть в списке', () => {",
+                  "  pm.expect(json.data.some(x => x.id === pm.environment.get('externalMetricDefinitionId'))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Model и MetricResult",
+      "item": [
+        {
+          "name": "Создать или обновить model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/models",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"postman-external-metrics-model\",\n  \"name\": \"Postman External Metrics Model\",\n  \"provider\": \"Postman E2E\",\n  \"isOpenSource\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Model upsert выполнен', () => pm.expect(json.id).to.eql('postman-external-metrics-model'));",
+                  "pm.environment.set('externalMetricModelId', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Получить models",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/models"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Тестовая model есть в списке', () => pm.expect(json.some(x => x.id === pm.environment.get('externalMetricModelId'))).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Добавить metric result",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metric-results",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"testId\": \"{{externalMetricTestId}}\",\n  \"metricId\": \"{{externalMetricDefinitionId}}\",\n  \"modelId\": \"{{externalMetricModelId}}\",\n  \"value\": 0.9137,\n  \"rawValue\": \"91.37%\",\n  \"obtainedAt\": \"{{externalMetricObtainedAt}}\",\n  \"importSource\": \"postman-external-metrics-e2e\",\n  \"metadata\": {\n    \"runMarker\": \"{{externalMetricRunMarker}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('externalMetricObtainedAt', new Date().toISOString());",
+                  "pm.environment.set('externalMetricRunMarker', `postman-run-${Date.now()}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Metric result создан', () => {",
+                  "  pm.expect(json.id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.testId).to.eql(pm.environment.get('externalMetricTestId'));",
+                  "  pm.expect(json.metricId).to.eql(pm.environment.get('externalMetricDefinitionId'));",
+                  "  pm.expect(json.modelId).to.eql(pm.environment.get('externalMetricModelId'));",
+                  "});",
+                  "pm.environment.set('externalMetricResultId', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Добавить второй metric result для проверки пагинации",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metric-results",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"testId\": \"{{externalMetricTestId}}\",\n  \"metricId\": \"{{externalMetricDefinitionId}}\",\n  \"modelId\": \"{{externalMetricModelId}}\",\n  \"value\": 0.9237,\n  \"rawValue\": \"92.37%\",\n  \"obtainedAt\": \"{{externalMetricSecondObtainedAt}}\",\n  \"importSource\": \"postman-external-metrics-e2e\",\n  \"metadata\": {\n    \"runMarker\": \"{{externalMetricSecondRunMarker}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const firstObtainedAt = new Date(pm.environment.get('externalMetricObtainedAt')).getTime();",
+                  "pm.environment.set('externalMetricSecondObtainedAt', new Date(firstObtainedAt + 1000).toISOString());",
+                  "pm.environment.set('externalMetricSecondRunMarker', `postman-run-second-${Date.now()}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Второй MetricResult создан', () => {",
+                  "  pm.expect(json.id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.testId).to.eql(pm.environment.get('externalMetricTestId'));",
+                  "});",
+                  "pm.environment.set('externalMetricSecondResultId', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Metric results: первая страница, limit=1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/benchmark-tests/{{externalMetricTestId}}/metric-results?page=1&limit=1&search={{externalMetricName}}&sortColumn=obtainedAt&sortDirection=desc"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Ответ имеет стандартную форму пагинации', () => {",
+                  "  pm.expect(json.data).to.be.an('array');",
+                  "  pm.expect(json.data).to.have.lengthOf(1);",
+                  "  pm.expect(json.total).to.be.a('number').and.to.be.at.least(2);",
+                  "});",
+                  "pm.test('На первой странице находится более новый result', () => {",
+                  "  pm.expect(json.data[0].id).to.eql(pm.environment.get('externalMetricSecondResultId'));",
+                  "});",
+                  "pm.environment.set('externalMetricResultsTotal', String(json.total));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Metric results: вторая страница, limit=1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/benchmark-tests/{{externalMetricTestId}}/metric-results?page=2&limit=1&search={{externalMetricName}}&sortColumn=obtainedAt&sortDirection=desc"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Вторая страница содержит предыдущий result', () => {",
+                  "  pm.expect(json.data).to.be.an('array').and.to.have.lengthOf(1);",
+                  "  pm.expect(json.data[0].id).to.eql(pm.environment.get('externalMetricResultId'));",
+                  "  pm.expect(String(json.total)).to.eql(pm.environment.get('externalMetricResultsTotal'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Scopes и безопасность",
+      "item": [
+        {
+          "name": "Read-only key может читать metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsReadOnlyApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metrics/{{externalMetricDefinitionId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read-only key не может создавать metric definition",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsReadOnlyApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metrics",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"forbidden_metric_{{$timestamp}}\",\n  \"priorityId\": \"{{externalMetricPriorityId}}\",\n  \"directionId\": \"{{externalMetricDirectionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403', () => pm.response.to.have.status(403));",
+                  "const json = pm.response.json();",
+                  "pm.test('Указан missing scope', () => pm.expect(String(json.message)).to.include('metric-definitions:write'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read-only key не может создавать model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsReadOnlyApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/models",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"forbidden-postman-model\",\n  \"name\": \"Must not be created\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read-only key не может добавлять result",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsReadOnlyApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metric-results",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"testId\": \"{{externalMetricTestId}}\",\n  \"metricId\": \"{{externalMetricDefinitionId}}\",\n  \"modelId\": \"{{externalMetricModelId}}\",\n  \"value\": 0.1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Без API key → 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/external/v1/metrics"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Подменённый API key → 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{tamperedExternalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metrics"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const key = pm.environment.get('externalMetricsApiKey') || '';",
+                  "if (!key) { throw new Error('Сначала создайте full-access API key'); }",
+                  "const last = key.slice(-1);",
+                  "pm.environment.set('tamperedExternalMetricsApiKey', key.slice(0, -1) + (last === 'A' ? 'B' : 'A'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Cleanup",
+      "description": "Удаляет временную metric definition через внутренний JWT endpoint. Связанный result удаляется каскадно. Затем отзывает оба API key.",
+      "item": [
+        {
+          "name": "Удалить тестовую metric definition и result",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/metrics/{{externalMetricDefinitionId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Отозвать full-access API key",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/external-api/api-keys/{{externalMetricsApiKeyId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Отозвать read-only API key",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/external-api/api-keys/{{externalMetricsReadOnlyApiKeyId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Отозванный ключ → 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{externalMetricsApiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/external/v1/metrics"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

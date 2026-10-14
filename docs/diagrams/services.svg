@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="880" viewBox="0 0 1200 880" role="img" aria-labelledby="title desc">
+  <title id="title">Catalog и Benchmark Service: ответственность и обмен</title>
+  <desc id="desc">Пользователь обращается к каталогу. Каталог хранит публикацию, поиск и результаты в своей базе. Команды передаются через Kafka в Benchmark Service, а события возвращаются в каталог. Benchmark Service хранит группы и описания Test в отдельной базе и имеет самостоятельное HTTP API. Модельный поиск использует HTTP, интервьюер — WebSocket.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#40576b"/>
+    </marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; fill: #203549; }
+      .heading { font-size: 25px; font-weight: 700; }
+      .box-title { font-size: 21px; font-weight: 700; }
+      .body { font-size: 17px; }
+      .small { font-size: 14px; }
+      .line { fill: none; stroke: #40576b; stroke-width: 2.5; marker-end: url(#arrow); }
+      .exchange { marker-start: url(#arrow); }
+      .db-line { fill: none; stroke: #40576b; stroke-width: 2.5; }
+    </style>
+  </defs>
+  <rect width="1200" height="880" fill="#f7fafc"/>
+  <text x="60" y="38" class="heading">Два независимых сервиса, один пользовательский продукт</text>
+
+  <rect x="60" y="70" width="300" height="95" rx="14" fill="#fff" stroke="#9eacb8"/>
+  <text x="80" y="102" class="box-title">Embedder / Reranker</text>
+  <text x="80" y="132" class="body">Текст в числа / сортировка</text>
+  <text x="80" y="152" class="small">Для подбора существующих Test</text>
+
+  <rect x="420" y="70" width="330" height="95" rx="14" fill="#fff" stroke="#9eacb8"/>
+  <text x="440" y="105" class="box-title">Пользователь / UI</text>
+  <text x="440" y="137" class="body">Карточки, заявки, диалог</text>
+
+  <rect x="850" y="70" width="290" height="95" rx="14" fill="#fff" stroke="#9eacb8"/>
+  <text x="870" y="105" class="box-title">Другой проект</text>
+  <text x="870" y="137" class="body">Самостоятельный клиент</text>
+
+  <path d="M 160 230 L 160 165" class="line exchange"/>
+  <text x="173" y="202" class="small">HTTP</text>
+  <path d="M 490 165 L 490 195 L 410 195 L 410 230" class="line exchange"/>
+  <text x="515" y="198" class="small">HTTP + Socket.IO</text>
+  <path d="M 995 165 L 995 230" class="line exchange"/>
+  <text x="1008" y="201" class="small">HTTP /api/v1</text>
+
+  <rect x="60" y="230" width="440" height="185" rx="16" fill="#e9f3ff" stroke="#5385b5" stroke-width="2"/>
+  <text x="82" y="265" class="box-title">Catalog</text>
+  <text x="82" y="295" class="body">Публикация и справочники</text>
+  <text x="82" y="323" class="body">Метрики, модели и результаты</text>
+  <text x="82" y="351" class="body">Поиск, рекомендации и диалоги</text>
+  <text x="82" y="391" class="small">Описание Test читает из своей копии</text>
+
+  <rect x="570" y="250" width="160" height="145" rx="16" fill="#fff5db" stroke="#b59a47" stroke-width="2"/>
+  <text x="609" y="319" class="box-title">Kafka</text>
+  <text x="595" y="281" class="body">команды →</text>
+  <text x="596" y="372" class="body">← события</text>
+  <path d="M 500 279 L 570 279" class="line"/>
+  <path d="M 730 279 L 800 279" class="line"/>
+  <path d="M 800 365 L 730 365" class="line"/>
+  <path d="M 570 365 L 500 365" class="line"/>
+
+  <rect x="800" y="230" width="340" height="185" rx="16" fill="#e7f5ed" stroke="#51876c" stroke-width="2"/>
+  <text x="820" y="265" class="box-title">Benchmark Service</text>
+  <text x="820" y="300" class="body">Benchmark — группы</text>
+  <text x="820" y="328" class="body">Test — описания испытаний</text>
+  <text x="820" y="356" class="body">DatasetSubsample — части Test</text>
+  <text x="820" y="391" class="small">Может работать без каталога</text>
+
+  <path d="M 280 415 L 280 475" class="db-line"/>
+  <path d="M 970 415 L 970 475" class="db-line"/>
+  <text x="303" y="452" class="small">Свои транзакции</text>
+  <text x="803" y="452" class="small">Свои транзакции</text>
+
+  <rect x="60" y="475" width="440" height="185" rx="16" fill="#fff" stroke="#5385b5" stroke-width="2"/>
+  <text x="82" y="512" class="box-title">PostgreSQL каталога + pgvector</text>
+  <text x="82" y="545" class="body">CatalogEntry, справочники, результаты</text>
+  <text x="82" y="573" class="body">Копии Benchmark/Test, поисковый индекс</text>
+  <text x="82" y="601" class="body">Пользователи, беседы, аналитика</text>
+  <text x="82" y="634" class="body">Свой Outbox / Inbox / итоги команд</text>
+
+  <rect x="800" y="475" width="340" height="185" rx="16" fill="#fff" stroke="#51876c" stroke-width="2"/>
+  <text x="820" y="512" class="box-title">PostgreSQL источника</text>
+  <text x="820" y="547" class="body">Benchmark + Test</text>
+  <text x="820" y="576" class="body">Спецификация Test в JSON</text>
+  <text x="820" y="605" class="body">Редакция / блокировка / удаление</text>
+  <text x="820" y="634" class="body">Свой Outbox / Inbox / ошибки</text>
+
+  <text x="540" y="478" class="small">Outbox — отправка</text>
+  <text x="540" y="503" class="small">Inbox — защита повторов</text>
+  <text x="540" y="565" class="small">Нет общей БД</text>
+  <text x="540" y="590" class="small">Нет cross-DB FK / JOIN</text>
+
+  <path d="M 60 330 L 32 330 L 32 764 L 60 764" class="line exchange"/>
+  <rect x="60" y="720" width="440" height="95" rx="14" fill="#fff" stroke="#9eacb8"/>
+  <text x="82" y="752" class="box-title">Интервьюер</text>
+  <text x="82" y="782" class="body">Уточнение требований к новому Test</text>
+  <text x="82" y="804" class="small">WebSocket; не запускает испытания каталога</text>
+
+  <text x="560" y="740" class="body">Outbox + retry: доставить после сбоя</text>
+  <text x="560" y="772" class="body">DLQ: разобрать неудачное сообщение</text>
+  <text x="560" y="804" class="body">202: принято; applied: сохранено и получено</text>
+  <text x="60" y="852" class="small">Текущая версия: нет Run, выполнения оценок и хранения полного датасета. Полные данные — во внешних системах.</text>
+</svg>

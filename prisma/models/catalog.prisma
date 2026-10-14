@@ -1,0 +1,262 @@
+// ── Removed enums (now admin-editable dictionaries, see Dict* models below) ──
+// BenchmarkTaskType, BenchmarkModality, BenchmarkModalityDirection,
+// BenchmarkLanguage, BenchmarkDifficulty — removed in settings_dictionaries
+// refactor. Their values live in taxonomy_* tables and are referenced by FK.
+
+enum BenchmarkValidationStatus {
+  validation
+  published
+  rejected
+}
+
+// ── Dictionary tables (admin-editable taxonomy) ─────────────────────────────
+//
+// Naming: model prefix `Dict`, table prefix `taxonomy_`.
+//
+// Case-insensitive uniqueness of `name` / `nameEn` is enforced by a functional
+// unique index on `lower(name)` / `lower(name_en)` added in the migration SQL
+// (Prisma 7 schema cannot express functional indexes). The plain `@@unique`
+// declarations below give Prisma a typed `findUnique` key and are kept as a
+// regression net for exact-case duplicates. For child dictionaries the
+// functional index is scoped by `(parent_id, lower(...))`.
+
+model DictMacroGroup {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(500)
+  nameEn        String  @map("name_en") @db.VarChar(500)
+  description   String? @db.Text
+  descriptionEn String? @map("description_en") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  subGroups DictSubGroup[]
+
+  @@unique([name])
+  @@unique([nameEn])
+  @@index([deletedAt])
+  @@map("taxonomy_macro_groups")
+}
+
+model DictSubGroup {
+  id           String @id @default(uuid()) @db.Uuid
+  macroGroupId String @map("macro_group_id") @db.Uuid
+
+  name          String  @db.VarChar(500)
+  nameEn        String  @map("name_en") @db.VarChar(500)
+  description   String? @db.Text
+  descriptionEn String? @map("description_en") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  macroGroup DictMacroGroup @relation(fields: [macroGroupId], references: [id], onDelete: Restrict)
+
+  @@unique([macroGroupId, name])
+  @@unique([macroGroupId, nameEn])
+  @@index([macroGroupId])
+  @@index([deletedAt])
+  @@map("taxonomy_sub_groups")
+}
+
+model DictAbilityTaxon {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(500)
+  nameEn        String  @map("name_en") @db.VarChar(500)
+  description   String? @db.Text
+  descriptionEn String? @map("description_en") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@unique([name])
+  @@unique([nameEn])
+  @@index([deletedAt])
+  @@map("taxonomy_ability_taxons")
+}
+
+model DictTaskType {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(500)
+  nameEn        String  @map("name_en") @db.VarChar(500)
+  description   String? @db.Text
+  descriptionEn String? @map("description_en") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@unique([name])
+  @@unique([nameEn])
+  @@index([deletedAt])
+  @@map("taxonomy_task_types")
+}
+
+model DictModality {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(500)
+  nameEn        String  @map("name_en") @db.VarChar(500)
+  description   String? @db.Text
+  descriptionEn String? @map("description_en") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@unique([name])
+  @@unique([nameEn])
+  @@index([deletedAt])
+  @@map("taxonomy_modalities")
+}
+
+model DictLanguage {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(500)
+  nameEn        String  @map("name_en") @db.VarChar(500)
+  description   String? @db.Text
+  descriptionEn String? @map("description_en") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@unique([name])
+  @@unique([nameEn])
+  @@index([deletedAt])
+  @@map("taxonomy_languages")
+}
+
+model DictDifficulty {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(500)
+  nameEn        String  @map("name_en") @db.VarChar(500)
+  description   String? @db.Text
+  descriptionEn String? @map("description_en") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@unique([name])
+  @@unique([nameEn])
+  @@index([deletedAt])
+  @@map("taxonomy_difficulties")
+}
+
+model DictCapability {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(500)
+  nameEn        String  @map("name_en") @db.VarChar(500)
+  description   String? @db.Text
+  descriptionEn String? @map("description_en") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@unique([name])
+  @@unique([nameEn])
+  @@index([deletedAt])
+  @@map("taxonomy_capabilities")
+}
+
+model DictDomain {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @db.VarChar(500)
+  nameEn        String  @map("name_en") @db.VarChar(500)
+  description   String? @db.Text
+  descriptionEn String? @map("description_en") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  subdomains DictSubdomain[]
+
+  @@unique([name])
+  @@unique([nameEn])
+  @@index([deletedAt])
+  @@map("taxonomy_domains")
+}
+
+model DictSubdomain {
+  id       String @id @default(uuid()) @db.Uuid
+  domainId String @map("domain_id") @db.Uuid
+
+  name          String  @db.VarChar(500)
+  nameEn        String  @map("name_en") @db.VarChar(500)
+  description   String? @db.Text
+  descriptionEn String? @map("description_en") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  domain DictDomain @relation(fields: [domainId], references: [id], onDelete: Restrict)
+
+  @@unique([domainId, name])
+  @@unique([domainId, nameEn])
+  @@index([domainId])
+  @@index([deletedAt])
+  @@map("taxonomy_subdomains")
+}
+
+model CatalogEntry {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Identifier of the Test owned by benchmark-service. This is deliberately a
+  // scalar reference: Catalog moderation must not depend on a local Test row or
+  // on a cross-service foreign key.
+  testId String @unique @map("test_id") @db.VarChar(160)
+
+  authorId String? @map("author_id") @db.Uuid
+  author   User?   @relation("CatalogEntryAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  sourceConversationId String?       @unique @map("source_conversation_id") @db.Uuid
+  sourceConversation   Conversation? @relation("CatalogEntrySourceConversation", fields: [sourceConversationId], references: [id], onDelete: SetNull)
+
+  status          BenchmarkValidationStatus @default(validation)
+  rejectionReason String?                   @map("rejection_reason") @db.Text
+
+  reviewedById String? @map("reviewed_by_id") @db.Uuid
+  reviewedBy   User?   @relation("CatalogEntryReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  submittedAt DateTime  @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt  DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, archivedAt])
+  @@index([authorId, status])
+  @@index([reviewedById])
+  @@map("catalog_entries")
+}
+
+/**
+ * Материализованный текст карточки и его embedding для semantic retrieval.
+ * Поле embedding обрабатывается raw SQL: Prisma пока не предоставляет
+ * типизированные vector operators pgvector.
+ */
+model BenchmarkSearchDocument {
+  benchmarkTestId String @id @map("benchmark_test_id") @db.VarChar(160)
+
+  documentText String @map("document_text") @db.Text
+  contentHash  String @map("content_hash") @db.VarChar(64)
+
+  embedding           Unsupported("vector")
+  embeddingSpecId     String                @map("embedding_spec_id") @db.VarChar(255)
+  embeddingDimensions Int                   @map("embedding_dimensions")
+
+  sourceUpdatedAt DateTime @map("source_updated_at") @db.Timestamptz(6)
+  embeddedAt      DateTime @default(now()) @map("embedded_at") @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([embeddingSpecId, embeddingDimensions])
+  @@index([sourceUpdatedAt])
+  @@map("benchmark_search_documents")
+}

@@ -1,0 +1,31 @@
+enum ExternalApiKeyStatus {
+  ACTIVE
+  REVOKED
+}
+
+model ExternalApiKey {
+  id String @id @default(uuid()) @db.Uuid
+
+  name        String  @db.VarChar(255)
+  prefix      String  @db.VarChar(32)
+  hmac        String? @db.VarChar(512)
+  description String? @db.Text
+
+  scopes  String[]             @default(["benchmark-tests:read"])
+  status  ExternalApiKeyStatus @default(ACTIVE)
+  ownerId String?              @map("owner") @db.Uuid
+  owner   User?                @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([prefix])
+  @@index([status])
+  @@index([ownerId])
+  @@index([expiresAt])
+  @@map("external_api_keys")
+}

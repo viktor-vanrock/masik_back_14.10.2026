@@ -1,0 +1,38 @@
+model InboxMessage {
+  /**
+   * Это eventId входящего Kafka-события.
+   * При повторной доставке eventId останется тем же,
+   * поэтому повторный INSERT нарушит primary key.
+   */
+  id String @id @map("event_id") @db.Uuid
+
+  // Kafka-позиция нужна для диагностики.
+  topic     String @db.VarChar(249)
+  partition Int
+  offset    BigInt @db.BigInt
+
+  eventType String @map("event_type") @db.VarChar(255)
+
+  /**
+   * Для recommendation result:
+   * aggregateType = "recommendation-request";
+   * aggregateId = requestId.
+   */
+  aggregateType String @map("aggregate_type") @db.VarChar(120)
+  aggregateId   String @map("aggregate_id") @db.VarChar(255)
+
+  /**
+   * Inbox-строка создаётся только после успешного применения
+   * бизнес-изменений в той же PostgreSQL-транзакции.
+   */
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
+
+  /**
+   * Одна физическая Kafka-запись тоже не должна быть
+   * обработана повторно под другим eventId.
+   */
+  @@unique([topic, partition, offset])
+  // Быстрый поиск событий конкретного бизнес-запроса.
+  @@index([aggregateType, aggregateId])
+  @@map("inbox_messages")
+}

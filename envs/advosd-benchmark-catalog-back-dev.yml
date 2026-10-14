@@ -1,0 +1,110 @@
+replicaCount: 1
+
+image:
+  repository: registry.sberdevices.ru/rndbtoc/benchmark-catalog/benchmark-catalog-back/benchmark-catalog-back
+  pullPolicy: IfNotPresent
+  command: ['sh', '-c']
+  args: ['. /vault/secrets/config && export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt && npm run prisma:migrate:deploy && npm run start:prod']
+
+imagePullSecrets:
+  - name: gitlab-registry-secret
+
+serviceAccount:
+  create: false
+  automount: true
+  annotations: {}
+  name: 'vault'
+
+podAnnotations:
+  vault.hashicorp.com/agent-inject: 'true'
+  vault.hashicorp.com/agent-inject-token: 'true'
+  vault.hashicorp.com/agent-pre-populate-only: 'true'
+  vault.hashicorp.com/agent-init-first: 'true'
+  vault.hashicorp.com/agent-inject-secret-config: 'rndbtoc/benchmark-catalog-back'
+  vault.hashicorp.com/role: 'd-rndbtoc'
+  vault.hashicorp.com/agent-inject-template-config: |
+    {{- with secret "rndbtoc/benchmark-catalog-back" -}}
+    {{ range $k, $v := .Data.data }}export {{ $k }}="$(printf '%s' '{{ printf "%v" $v | base64Encode }}' | base64 -d)"
+    {{ end }}{{- end -}}
+  vault.hashicorp.com/agent-inject-secret-kafka-cert: 'pki_int_ca/issue/rndbtoc'
+  vault.hashicorp.com/agent-inject-file-kafka-cert: 'kafka-cert.pem'
+  vault.hashicorp.com/agent-inject-template-kafka-cert: |
+    {{- with secret "pki_int_ca/issue/rndbtoc" "common_name=benchmark-catalog-back.d-rndbtoc" -}}
+    {{ .Data.certificate }}
+    {{- end -}}
+  vault.hashicorp.com/agent-inject-secret-kafka-key: 'pki_int_ca/issue/rndbtoc'
+  vault.hashicorp.com/agent-inject-file-kafka-key: 'kafka-key.pem'
+  vault.hashicorp.com/agent-inject-template-kafka-key: |
+    {{- with secret "pki_int_ca/issue/rndbtoc" "common_name=benchmark-catalog-back.d-rndbtoc" -}}
+    {{ .Data.private_key }}
+    {{- end -}}
+  vault.hashicorp.com/agent-inject-secret-kafka-ca: 'pki_int_ca/issue/rndbtoc'
+  vault.hashicorp.com/agent-inject-file-kafka-ca: 'kafka-ca.pem'
+  # Полная цепочка (промежуточный + корневой): с одним промежуточным Node
+  # не может проверить сертификат брокера (unable to get issuer certificate).
+  vault.hashicorp.com/agent-inject-template-kafka-ca: |
+    {{- with secret "pki_int_ca/issue/rndbtoc" "common_name=benchmark-catalog-back.d-rndbtoc" -}}
+    {{ range .Data.ca_chain }}{{ . }}
+    {{ end }}
+    {{- end -}}
+
+service:
+  enabled: true
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      protocol: TCP
+      targetPort: 3000
+
+ingress:
+  enabled: true
+  openshift: true
+  route:
+    path: '/'
+    annotations:
+      haproxy.router.openshift.io/rewrite-target: /
+  annotations: {}
+  hosts:
+    - host: apps.advosd.sberdevices.ru
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+volumes:
+  - name: cache
+    emptyDir:
+      sizeLimit: 100Mi
+  - name: run
+    emptyDir:
+      sizeLimit: 10Mi
+volumeMounts:
+  - name: cache
+    mountPath: "/var/cache/nginx"
+  - name: run
+    mountPath: "/var/run"
+
+livenessProbe:
+  httpGet:
+    path: /api/health/live
+    port: 3000
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+readinessProbe:
+  httpGet:
+    path: /api/health/ready
+    port: 3000
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Redis больше не sidecar в этом поде — вынесен в отдельный Helm-релиз
+# benchmark-catalog-redis (envs/advosd-benchmark-catalog-redis-dev.yml),
+# т.к. кэш общий с agent-bench-factory, а не только с этим сервисом.
+# REDIS_HOST=benchmark-catalog-redis, REDIS_PORT=6379.

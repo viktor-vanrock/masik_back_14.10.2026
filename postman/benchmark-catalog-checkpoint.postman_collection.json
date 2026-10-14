@@ -1,0 +1,1525 @@
+{
+  "info": {
+    "_postman_id": "d3d327ff-a582-45ab-a592-b2848862debf",
+    "name": "Benchmark Catalog — Business Checkpoint",
+    "description": "Живой regression-smoke текущего бизнес-контракта перед выделением Benchmark Service. Запускайте коллекцию целиком и строго по порядку с окружением `Benchmark Catalog — Checkpoint Local`. Коллекция создаёт реальные данные с уникальным префиксом `postman_*`; используйте только локальную или одноразовую dev-БД. Run намеренно не создаётся: эта сущность ещё не реализована.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const unsafeMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];",
+          "if (unsafeMethods.includes(pm.request.method)) {",
+          "  pm.request.headers.upsert({",
+          "    key: 'Origin',",
+          "    value: pm.environment.get('origin') || 'http://localhost:5174'",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "runSuffix", "value": "" },
+    { "key": "primaryPriorityId", "value": "" },
+    { "key": "secondaryPriorityId", "value": "" },
+    { "key": "higherDirectionId", "value": "" },
+    { "key": "lowerDirectionId", "value": "" },
+    { "key": "metricAName", "value": "" },
+    { "key": "metricAId", "value": "" },
+    { "key": "metricBName", "value": "" },
+    { "key": "metricBId", "value": "" },
+    { "key": "foreignMetricName", "value": "" },
+    { "key": "foreignMetricId", "value": "" },
+    { "key": "suiteId", "value": "" },
+    { "key": "testId", "value": "" },
+    { "key": "subsampleId", "value": "" },
+    { "key": "modelId", "value": "" },
+    { "key": "resultAId", "value": "" },
+    { "key": "resultBId", "value": "" },
+    { "key": "userUsername", "value": "" },
+    { "key": "userEmail", "value": "" },
+    { "key": "userPassword", "value": "" },
+    { "key": "submissionTestId", "value": "" },
+    { "key": "submissionAuthorId", "value": "" },
+    { "key": "lifecycleTestId", "value": "" },
+    { "key": "lifecycleSuffix", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 — Стенд и авторизация",
+      "item": [
+        {
+          "name": "Инициализировать запуск + liveness",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;",
+                  "const values = {",
+                  "  runSuffix: suffix,",
+                  "  metricAName: `postman_accuracy_${suffix}`,",
+                  "  metricBName: `postman_latency_${suffix}`,",
+                  "  foreignMetricName: `postman_unassigned_${suffix}`,",
+                  "  modelId: `postman-model-${suffix}`,",
+                  "  userUsername: `postman-user-${suffix}`,",
+                  "  userEmail: `postman-user-${suffix}@example.test`,",
+                  "  userPassword: `Postman!${suffix}Aa`,",
+                  "};",
+                  "Object.entries(values).forEach(([key, value]) => pm.collectionVariables.set(key, value));",
+                  "['primaryPriorityId', 'secondaryPriorityId', 'higherDirectionId', 'lowerDirectionId', 'metricAId', 'metricBId', 'foreignMetricId', 'suiteId', 'testId', 'subsampleId', 'resultAId', 'resultBId', 'submissionTestId', 'submissionAuthorId', 'lifecycleTestId'].forEach((key) => pm.collectionVariables.unset(key));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Процесс жив', () => pm.expect(pm.response.json().status).to.eql('up'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health/live"
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness: PostgreSQL, pgvector и индекс готовы",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Стенд готов', () => {",
+                  "  pm.expect(json.status).to.eql('up');",
+                  "  pm.expect(json.checks.database.status).to.eql('up');",
+                  "  pm.expect(json.checks.database.details.searchIndex).to.eql('synchronized');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health/ready"
+          },
+          "response": []
+        },
+        {
+          "name": "Очистить старую cookie-сессию",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Logout идемпотентен', () => pm.expect(pm.response.json()).to.deep.include({ success: true }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/auth/logout"
+          },
+          "response": []
+        },
+        {
+          "name": "Management API без сессии → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/benchmark-tests/management"
+          },
+          "response": []
+        },
+        {
+          "name": "Войти как локальный SuperUser",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code !== 200) pm.execution.setNextRequest(null);",
+                  "const json = pm.response.json();",
+                  "pm.test('Login успешен', () => pm.expect(json).to.deep.include({ success: true }));",
+                  "pm.test('HttpOnly cookie установлена', () => pm.expect(pm.response.headers.get('Set-Cookie')).to.include('access_token='));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/auth/login"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "01 — Подготовка Benchmark и Metric",
+      "item": [
+        {
+          "name": "Получить приоритеты Metric",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const primary = json.find((item) => item.code === 'primary');",
+                  "const secondary = json.find((item) => item.code === 'secondary');",
+                  "pm.test('Оба приоритета существуют', () => { pm.expect(primary).to.exist; pm.expect(secondary).to.exist; });",
+                  "if (primary) pm.collectionVariables.set('primaryPriorityId', primary.id);",
+                  "if (secondary) pm.collectionVariables.set('secondaryPriorityId', secondary.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/metrics/lookups/priorities"
+          },
+          "response": []
+        },
+        {
+          "name": "Получить направления Metric",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const higher = json.find((item) => item.code === 'higher_is_better');",
+                  "const lower = json.find((item) => item.code === 'lower_is_better');",
+                  "pm.test('Оба направления существуют', () => { pm.expect(higher).to.exist; pm.expect(lower).to.exist; });",
+                  "if (higher) pm.collectionVariables.set('higherDirectionId', higher.id);",
+                  "if (lower) pm.collectionVariables.set('lowerDirectionId', lower.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/metrics/lookups/directions"
+          },
+          "response": []
+        },
+        {
+          "name": "Создать Metric A: accuracy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Глобальная Metric создана без Test-полей', () => {",
+                  "  pm.expect(json.name).to.eql(pm.collectionVariables.get('metricAName'));",
+                  "  pm.expect(json).not.to.have.property('evaluationLogic');",
+                  "  pm.expect(json).not.to.have.property('requiredGigaChatQualityLevel');",
+                  "});",
+                  "pm.collectionVariables.set('metricAId', json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{metricAName}}\",\n  \"displayName\": \"Postman Accuracy {{runSuffix}}\",\n  \"priorityId\": \"{{primaryPriorityId}}\",\n  \"directionId\": \"{{higherDirectionId}}\",\n  \"minValue\": 0,\n  \"maxValue\": 1,\n  \"targetValue\": 0.8,\n  \"metadata\": { \"checkpoint\": \"{{runSuffix}}\" }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics"
+          },
+          "response": []
+        },
+        {
+          "name": "Создать Metric B: latency",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Metric B использует отдельные глобальные настройки', () => {",
+                  "  pm.expect(json.name).to.eql(pm.collectionVariables.get('metricBName'));",
+                  "  pm.expect(json.direction.code).to.eql('lower_is_better');",
+                  "});",
+                  "pm.collectionVariables.set('metricBId', json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{metricBName}}\",\n  \"displayName\": \"Postman Latency {{runSuffix}}\",\n  \"priorityId\": \"{{secondaryPriorityId}}\",\n  \"directionId\": \"{{lowerDirectionId}}\",\n  \"minValue\": 0,\n  \"maxValue\": 10000\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics"
+          },
+          "response": []
+        },
+        {
+          "name": "Создать постороннюю Metric для negative-case",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('foreignMetricId', json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{foreignMetricName}}\",\n  \"displayName\": \"Unassigned {{runSuffix}}\",\n  \"priorityId\": \"{{primaryPriorityId}}\",\n  \"directionId\": \"{{higherDirectionId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics"
+          },
+          "response": []
+        },
+        {
+          "name": "Metric не принимает evaluation logic → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"postman_invalid_metric_{{runSuffix}}\",\n  \"priorityId\": \"{{primaryPriorityId}}\",\n  \"directionId\": \"{{higherDirectionId}}\",\n  \"evaluationLogic\": \"Это поле принадлежит Test\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics"
+          },
+          "response": []
+        },
+        {
+          "name": "Создать Benchmark (группу тестов)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Benchmark — контейнер, пока без Test', () => {",
+                  "  pm.expect(json.name).to.eql(`Postman Benchmark ${pm.collectionVariables.get('runSuffix')}`);",
+                  "  pm.expect(json.benchmarkTestsCount).to.eql(0);",
+                  "});",
+                  "pm.collectionVariables.set('suiteId', json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Benchmark {{runSuffix}}\",\n  \"nameEn\": \"Postman Benchmark {{runSuffix}} EN\",\n  \"description\": \"Группа Test для ручной проверки\",\n  \"descriptionEn\": \"Test suite for manual checkpoint\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/benchmarks"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 — Test, DatasetSubsample и публикация",
+      "item": [
+        {
+          "name": "Создать Test без Metric в validation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Test владеет evaluation, human baseline и DatasetSubsample', () => {",
+                  "  pm.expect(json.validationStatus).to.eql('validation');",
+                  "  pm.expect(json.metrics).to.eql([]);",
+                  "  pm.expect(json.evaluationLogic).to.include('Test-level');",
+                  "  pm.expect(json.humanBaseline).to.eql(0.93);",
+                  "  pm.expect(json.datasetSubsamples).to.have.lengthOf(1);",
+                  "});",
+                  "pm.collectionVariables.set('testId', json.id);",
+                  "pm.collectionVariables.set('subsampleId', json.datasetSubsamples[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"suiteId\": \"{{suiteId}}\",\n  \"name\": \"Postman Test {{runSuffix}}\",\n  \"nameEn\": \"Postman Test {{runSuffix}} EN\",\n  \"description\": \"Test для проверки бизнес-инвариантов\",\n  \"evaluationLogic\": \"Test-level evaluation logic\",\n  \"humanBaseline\": 0.93,\n  \"humanBaselineNotes\": \"Хранится на Test, не как Model=Human\",\n  \"requiredGigaChatQualityLevel\": \"pro\",\n  \"gigaMetricAdapterName\": \"postman-adapter\",\n  \"gigaMetricSetUrl\": \"http://metrics.local/sets/{{runSuffix}}\",\n  \"gigaMetricLaunchCommand\": \"evaluate --test {{runSuffix}}\",\n  \"gigaMetricsCodebaseUrl\": \"http://git.local/metrics/{{runSuffix}}\",\n  \"datasetSubsamples\": [\n    {\n      \"name\": \"visual-validation-{{runSuffix}}\",\n      \"nameEn\": \"Visual validation {{runSuffix}}\",\n      \"description\": \"Часть Test только для описания и визуализации\",\n      \"split\": \"validation\",\n      \"sizeInSamples\": 25,\n      \"examples\": [\n        { \"input\": \"2 + 2\", \"output\": \"4\", \"explanation\": \"Smoke example\" }\n      ]\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/benchmark-tests"
+          },
+          "response": []
+        },
+        {
+          "name": "Непубликованный Test скрыт из public API → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/benchmark-tests/{{testId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin видит Test и CatalogEntry в management API",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('CatalogEntry — единственный владелец moderation state', () => {",
+                  "  pm.expect(json.validationStatus).to.eql('validation');",
+                  "  pm.expect(json.catalogEntry.status).to.eql('validation');",
+                  "});",
+                  "const subsample = json.datasetSubsamples[0];",
+                  "pm.test('DatasetSubsample не имеет собственной taxonomy', () => {",
+                  "  pm.expect(subsample).not.to.have.property('taskTypeId');",
+                  "  pm.expect(subsample).not.to.have.property('domainIds');",
+                  "  pm.expect(subsample).not.to.have.property('subdomainIds');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/benchmark-tests/management/{{testId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Публикация без Metric запрещена → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"status\": \"published\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/catalog/entries/{{testId}}/moderation"
+          },
+          "response": []
+        },
+        {
+          "name": "Test API не принимает validationStatus → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"validationStatus\": \"published\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/benchmark-tests/{{testId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "DatasetSubsample не принимает собственную taxonomy → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"datasetSubsamples\": [\n    {\n      \"id\": \"{{subsampleId}}\",\n      \"name\": \"visual-validation-{{runSuffix}}\",\n      \"nameEn\": \"Visual validation {{runSuffix}}\",\n      \"taskTypeId\": \"00000000-0000-4000-8000-000000000001\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/benchmark-tests/{{testId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Назначить Test две независимые Metric",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Обе Metric назначены, DatasetSubsample сохранён', () => {",
+                  "  pm.expect(json.metrics).to.have.members([pm.collectionVariables.get('metricAName'), pm.collectionVariables.get('metricBName')]);",
+                  "  pm.expect(json.datasetSubsamples[0].id).to.eql(pm.collectionVariables.get('subsampleId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"metrics\": [\"{{metricAName}}\", \"{{metricBName}}\"] }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/benchmark-tests/{{testId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Опубликовать через Catalog moderation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Статус опубликован и причина отказа очищена', () => {",
+                  "  pm.expect(json.validationStatus).to.eql('published');",
+                  "  pm.expect(json.catalogEntry.status).to.eql('published');",
+                  "  pm.expect(json.catalogEntry.rejectionReason).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"status\": \"published\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/catalog/entries/{{testId}}/moderation"
+          },
+          "response": []
+        },
+        {
+          "name": "Опубликованный Test виден целиком в public API",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Контракт Test сохранён', () => {",
+                  "  pm.expect(json.validationStatus).to.eql('published');",
+                  "  pm.expect(json.humanBaseline).to.eql(0.93);",
+                  "  pm.expect(json.evaluationLogic).to.include('Test-level');",
+                  "  pm.expect(json.datasetSubsamples[0].id).to.eql(pm.collectionVariables.get('subsampleId'));",
+                  "  pm.expect(json.metrics).to.have.lengthOf(2);",
+                  "  pm.expect(json.scores).to.eql([]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/benchmark-tests/{{testId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "У опубликованного Test нельзя удалить последнюю Metric → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"metrics\": [] }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/benchmark-tests/{{testId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Benchmark с активным Test нельзя удалить → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/benchmarks/{{suiteId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 — MetricResult без Run и subsample scope",
+      "item": [
+        {
+          "name": "Создать Model",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Model создана', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('modelId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{modelId}}\",\n  \"name\": \"Postman Model {{runSuffix}}\",\n  \"provider\": \"manual-checkpoint\",\n  \"isOpenSource\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics/models"
+          },
+          "response": []
+        },
+        {
+          "name": "MetricResult с runId запрещён → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"runId\": \"not-implemented\", \"testId\": \"{{testId}}\", \"metricId\": \"{{metricAId}}\", \"modelId\": \"{{modelId}}\", \"value\": 0.1 }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics/results"
+          },
+          "response": []
+        },
+        {
+          "name": "MetricResult на DatasetSubsample запрещён → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"subsampleId\": \"{{subsampleId}}\", \"testId\": \"{{testId}}\", \"metricId\": \"{{metricAId}}\", \"modelId\": \"{{modelId}}\", \"value\": 0.1 }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics/results"
+          },
+          "response": []
+        },
+        {
+          "name": "Synthetic Model=Human запрещена → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"testId\": \"{{testId}}\", \"metricId\": \"{{metricAId}}\", \"modelId\": \"  HuMaN  \", \"value\": 0.99 }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics/results"
+          },
+          "response": []
+        },
+        {
+          "name": "Результат по неназначенной Metric запрещён → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"testId\": \"{{testId}}\", \"metricId\": \"{{foreignMetricId}}\", \"modelId\": \"{{modelId}}\", \"value\": 0.1 }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics/results"
+          },
+          "response": []
+        },
+        {
+          "name": "Записать результат Metric A на уровне Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Результат привязан к Test и Metric A', () => {",
+                  "  pm.expect(json.testId).to.eql(pm.collectionVariables.get('testId'));",
+                  "  pm.expect(json.metricId).to.eql(pm.collectionVariables.get('metricAId'));",
+                  "  pm.expect(Number(json.value)).to.eql(0.81);",
+                  "});",
+                  "pm.collectionVariables.set('resultAId', json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"testId\": \"{{testId}}\",\n  \"metricId\": \"{{metricAId}}\",\n  \"modelId\": \"{{modelId}}\",\n  \"value\": 0.81,\n  \"rawValue\": \"81%\",\n  \"importSource\": \"postman-checkpoint\",\n  \"metadata\": { \"checkpoint\": \"{{runSuffix}}\" }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics/results"
+          },
+          "response": []
+        },
+        {
+          "name": "Записать отдельный результат Metric B",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Результат Metric B не агрегирован с Metric A', () => pm.expect(json.metricId).to.eql(pm.collectionVariables.get('metricBId')));",
+                  "pm.collectionVariables.set('resultBId', json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"testId\": \"{{testId}}\",\n  \"metricId\": \"{{metricBId}}\",\n  \"modelId\": \"{{modelId}}\",\n  \"value\": 230,\n  \"rawValue\": \"230 ms\",\n  \"importSource\": \"postman-checkpoint\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/metrics/results"
+          },
+          "response": []
+        },
+        {
+          "name": "Получить два независимых результата",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const ids = json.data.map((item) => item.metricId);",
+                  "pm.test('Ровно два отдельных MetricResult', () => {",
+                  "  pm.expect(json.total).to.eql(2);",
+                  "  pm.expect(ids).to.have.members([pm.collectionVariables.get('metricAId'), pm.collectionVariables.get('metricBId')]);",
+                  "});",
+                  "pm.test('Run/subsample поля отсутствуют в ответе', () => json.data.forEach((item) => {",
+                  "  pm.expect(item).not.to.have.property('runId');",
+                  "  pm.expect(item).not.to.have.property('subsampleId');",
+                  "  pm.expect(item).not.to.have.property('subsetId');",
+                  "  pm.expect(item).not.to.have.property('rawSubsampleName');",
+                  "}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/metrics/tests/{{testId}}/results?limit=100"
+          },
+          "response": []
+        },
+        {
+          "name": "Public Test показывает human baseline и две score",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const pairs = json.scores.map((item) => `${item.modelId}:${item.metricId}`);",
+                  "pm.test('Нет общего score — каждая Metric показана отдельно', () => {",
+                  "  pm.expect(json.humanBaseline).to.eql(0.93);",
+                  "  pm.expect(json.scores).to.have.lengthOf(2);",
+                  "  pm.expect(pairs).to.have.members([`${pm.collectionVariables.get('modelId')}:${pm.collectionVariables.get('metricAId')}`, `${pm.collectionVariables.get('modelId')}:${pm.collectionVariables.get('metricBId')}`]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/benchmark-tests/{{testId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "После первого результата Test immutable → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"description\": \"Эта запись не должна примениться\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/benchmark-tests/{{testId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "После первого результата Test нельзя удалить → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/benchmark-tests/{{testId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Назначенную Metric нельзя удалить → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/metrics/{{metricAId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 — Автор, личный кабинет и moderation",
+      "item": [
+        {
+          "name": "Зарегистрировать обычного пользователя",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Регистрация установила cookie', () => {",
+                  "  pm.expect(pm.response.json()).to.deep.include({ success: true });",
+                  "  pm.expect(pm.response.headers.get('Set-Cookie')).to.include('access_token=');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{userUsername}}\",\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/auth/register"
+          },
+          "response": []
+        },
+        {
+          "name": "Пользователь отправляет Test в каталог",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Автор и validation назначены сервером', () => {",
+                  "  pm.expect(json.validationStatus).to.eql('validation');",
+                  "  pm.expect(json.catalogEntry.status).to.eql('validation');",
+                  "  pm.expect(json.catalogEntry.authorId).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set('submissionTestId', json.id);",
+                  "pm.collectionVariables.set('submissionAuthorId', json.catalogEntry.authorId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"suiteId\": \"{{suiteId}}\",\n  \"name\": \"Postman User Submission {{runSuffix}}\",\n  \"nameEn\": \"Postman User Submission {{runSuffix}} EN\",\n  \"description\": \"Проверка личного кабинета и модерации\",\n  \"metrics\": [\"{{metricAName}}\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/catalog/submissions"
+          },
+          "response": []
+        },
+        {
+          "name": "Автор не может подделать status/author → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"suiteId\": \"{{suiteId}}\",\n  \"name\": \"Forged Submission {{runSuffix}}\",\n  \"nameEn\": \"Forged Submission {{runSuffix}} EN\",\n  \"description\": \"Не должна создаться\",\n  \"metrics\": [\"{{metricAName}}\"],\n  \"validationStatus\": \"published\",\n  \"authorId\": \"00000000-0000-4000-8000-000000000001\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/catalog/submissions"
+          },
+          "response": []
+        },
+        {
+          "name": "Личный кабинет возвращает submission автора",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Submission виден только как собственный', () => {",
+                  "  pm.expect(json.total).to.eql(1);",
+                  "  pm.expect(json.data[0].id).to.eql(pm.collectionVariables.get('submissionTestId'));",
+                  "  pm.expect(json.data[0].catalogEntry.authorId).to.eql(pm.collectionVariables.get('submissionAuthorId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/catalog/submissions/mine?limit=100"
+          },
+          "response": []
+        },
+        {
+          "name": "Обычный пользователь не может модерировать → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"status\": \"published\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/catalog/entries/{{submissionTestId}}/moderation"
+          },
+          "response": []
+        },
+        {
+          "name": "Снова войти как SuperUser",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Login успешен', () => pm.expect(pm.response.json()).to.deep.include({ success: true }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "Reject без причины запрещён → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"status\": \"rejected\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/catalog/entries/{{submissionTestId}}/moderation"
+          },
+          "response": []
+        },
+        {
+          "name": "Отклонить с причиной",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Причина и reviewer записаны', () => {",
+                  "  pm.expect(json.validationStatus).to.eql('rejected');",
+                  "  pm.expect(json.catalogEntry.rejectionReason).to.eql('Недостаточно подробное описание методики');",
+                  "  pm.expect(json.catalogEntry.reviewedById).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"status\": \"rejected\", \"rejectionReason\": \"Недостаточно подробное описание методики\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/catalog/entries/{{submissionTestId}}/moderation"
+          },
+          "response": []
+        },
+        {
+          "name": "Rejected Test скрыт из public API → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/benchmark-tests/{{submissionTestId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Опубликовать submission и очистить rejection reason",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Submission опубликован', () => {",
+                  "  pm.expect(json.validationStatus).to.eql('published');",
+                  "  pm.expect(json.catalogEntry.rejectionReason).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"status\": \"published\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/catalog/entries/{{submissionTestId}}/moderation"
+          },
+          "response": []
+        },
+        {
+          "name": "Published submission виден публично",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Статус published', () => pm.expect(pm.response.json().validationStatus).to.eql('published'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/benchmark-tests/{{submissionTestId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 — Soft delete и restore без результатов",
+      "item": [
+        {
+          "name": "Создать отдельный Test для lifecycle",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const lifecycleSuffix = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;",
+                  "pm.collectionVariables.set('lifecycleSuffix', lifecycleSuffix);",
+                  "pm.collectionVariables.unset('lifecycleTestId');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('lifecycleTestId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"suiteId\": \"{{suiteId}}\",\n  \"name\": \"Postman Lifecycle Test {{lifecycleSuffix}}\",\n  \"nameEn\": \"Postman Lifecycle Test {{lifecycleSuffix}} EN\",\n  \"description\": \"Delete/restore scenario\",\n  \"metrics\": [\"{{metricAName}}\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/benchmark-tests"
+          },
+          "response": []
+        },
+        {
+          "name": "Опубликовать lifecycle Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Test published', () => pm.expect(pm.response.json().validationStatus).to.eql('published'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"status\": \"published\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/catalog/entries/{{lifecycleTestId}}/moderation"
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete lifecycle Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/benchmark-tests/{{lifecycleTestId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Удалённый Test скрыт → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/benchmark-tests/{{lifecycleTestId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Restore возвращает Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Статус публикации сохранён', () => pm.expect(pm.response.json().validationStatus).to.eql('published'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/benchmark-tests/{{lifecycleTestId}}/restore"
+          },
+          "response": []
+        },
+        {
+          "name": "Повторный restore идемпотентен",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Тот же Test активен', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('lifecycleTestId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/benchmark-tests/{{lifecycleTestId}}/restore"
+          },
+          "response": []
+        },
+        {
+          "name": "Восстановленный Test снова публичен",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Test published', () => pm.expect(pm.response.json().validationStatus).to.eql('published'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/benchmark-tests/{{lifecycleTestId}}"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

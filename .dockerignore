@@ -1,0 +1,7 @@
+# node_modules и dist приходят из артефактов CI build job
+.git
+.env
+.env.*
+coverage
+llm-markup-back
+local

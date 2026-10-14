@@ -1,0 +1,101 @@
+model CatalogBenchmarkProjection {
+  benchmarkId String @id @map("benchmark_id") @db.VarChar(160)
+
+  aggregateVersion Int @map("aggregate_version")
+  name             String? @db.VarChar(500)
+  nameEn           String? @map("name_en") @db.VarChar(500)
+  description      String? @db.Text
+  descriptionEn    String? @map("description_en") @db.Text
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+  sourceCreatedAt  DateTime? @map("source_created_at") @db.Timestamptz(6)
+  sourceUpdatedAt  DateTime @map("source_updated_at") @db.Timestamptz(6)
+  receivedAt       DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+
+  @@index([deletedAt])
+  @@index([deletedAt, sourceCreatedAt, benchmarkId])
+  @@index([sourceUpdatedAt])
+  @@map("catalog_benchmark_projections")
+}
+
+model CatalogTestProjection {
+  testId String @id @map("test_id") @db.VarChar(160)
+
+  benchmarkId      String?   @map("benchmark_id") @db.VarChar(160)
+  aggregateVersion Int       @map("aggregate_version")
+  snapshot         Json?     @db.JsonB
+
+  // Queryable copy of the remote Test specification. The complete immutable
+  // payload remains in snapshot; these fields keep filtering and pagination
+  // inside PostgreSQL instead of loading every snapshot into application memory.
+  name             String?   @db.VarChar(500)
+  nameEn           String?   @map("name_en") @db.VarChar(500)
+  description      String?   @db.Text
+  descriptionEn    String?   @map("description_en") @db.Text
+  shortDescription String?   @map("short_description") @db.Text
+  taskDescription  String?   @map("task_description") @db.Text
+  sizeInSamples    Int?      @map("size_in_samples")
+  macroGroupId     String?   @map("macro_group_id") @db.Uuid
+  taskTypeId       String?   @map("task_type_id") @db.Uuid
+  languageId       String?   @map("language_id") @db.Uuid
+  difficultyId     String?   @map("difficulty_id") @db.Uuid
+  subGroupIds      String[]  @default([]) @map("sub_group_ids") @db.Uuid
+  abilityTaxonIds  String[]  @default([]) @map("ability_taxon_ids") @db.Uuid
+  domainIds        String[]  @default([]) @map("domain_ids") @db.Uuid
+  subdomainIds     String[]  @default([]) @map("subdomain_ids") @db.Uuid
+  modalityIds      String[]  @default([]) @map("modality_ids") @db.Uuid
+  capabilityIds    String[]  @default([]) @map("capability_ids") @db.Uuid
+  metricIds        String[]  @default([]) @map("metric_ids") @db.Uuid
+  abilityTags      String[]  @default([]) @map("ability_tags") @db.VarChar(255)
+  skills           String[]  @default([]) @db.VarChar(255)
+
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+  sourceCreatedAt DateTime? @map("source_created_at") @db.Timestamptz(6)
+  sourceUpdatedAt DateTime  @map("source_updated_at") @db.Timestamptz(6)
+  receivedAt      DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+
+  // Intentionally no FK to Benchmark/Test source tables. These rows must be
+  // copyable into a separate Catalog database and tolerate event reordering.
+  @@index([benchmarkId, deletedAt])
+  @@index([deletedAt, sourceCreatedAt, testId])
+  @@index([name])
+  @@index([macroGroupId])
+  @@index([taskTypeId])
+  @@index([languageId])
+  @@index([difficultyId])
+  @@index([sizeInSamples])
+  @@index([sourceUpdatedAt])
+  @@map("catalog_test_projections")
+}
+
+model BenchmarkCommandOutcome {
+  commandEventId  String   @id @map("command_event_id") @db.Uuid
+  responseEventId String   @unique @map("response_event_id") @db.Uuid
+  commandEventType String  @map("command_event_type") @db.VarChar(255)
+  aggregateType    String  @map("aggregate_type") @db.VarChar(120)
+  aggregateId      String  @map("aggregate_id") @db.VarChar(255)
+  status           String  @db.VarChar(32)
+  reasonCode       String? @map("reason_code") @db.VarChar(255)
+  statusCode       Int?    @map("status_code")
+  deletedId        String? @map("deleted_id") @db.Uuid
+  message          String? @db.Text
+  occurredAt       DateTime @map("occurred_at") @db.Timestamptz(6)
+  recordedAt       DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+
+  // Deliberately no FK to the generic Outbox table: operational retention of
+  // published transport rows must not erase the durable business outcome.
+  @@index([aggregateType, aggregateId, recordedAt])
+  @@index([status, recordedAt])
+  @@map("benchmark_command_outcomes")
+}
+
+model BenchmarkCommandActor {
+  commandEventId String   @id @map("command_event_id") @db.Uuid
+  actorId        String   @map("actor_id") @db.Uuid
+  resetSubmissionOnApplied Boolean @default(false) @map("reset_submission_on_applied")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Deliberately independent of Outbox retention. It lets a regular user poll
+  // only operations initiated through their own Catalog submission workflow.
+  @@index([actorId, createdAt])
+  @@map("benchmark_command_actors")
+}

@@ -1,0 +1,66 @@
+model OutboxMessage {
+  /**
+   * Одновременно является eventId Kafka-события.
+   * Если publisher отправит запись дважды, eventId не изменится,
+   * поэтому consumer сможет распознать дубль.
+   */
+  id String @id @default(uuid()) @db.Uuid
+
+  // Kafka topic, в который нужно отправить сообщение.
+  topic String @db.VarChar(249)
+
+  // Kafka message key.
+  // Для рекомендации здесь будет RecommendationRequest.id.
+  messageKey String @map("message_key") @db.VarChar(255)
+
+  // Дублируем тип отдельно от payload для поиска и диагностики.
+  eventType String @map("event_type") @db.VarChar(255)
+
+  /**
+   * Тип и ID бизнес-сущности, породившей событие.
+   * Outbox остаётся универсальным и позже сможет отправлять
+   * события об изменении benchmark/dataset.
+   */
+  aggregateType String @map("aggregate_type") @db.VarChar(120)
+  aggregateId   String @map("aggregate_id") @db.VarChar(255)
+
+  // Optional producer-owned idempotency key. Benchmark snapshots use
+  // aggregate type + id + version so a backfill cannot enqueue duplicates.
+  deduplicationKey String? @unique @map("deduplication_key") @db.VarChar(500)
+
+  // Полный KafkaEvent, который publisher сериализует в JSON.
+  payload Json @db.JsonB
+
+  // Количество неудачных попыток публикации.
+  attempts Int @default(0)
+
+  /**
+   * Раньше этого времени сообщение публиковать нельзя.
+   * После ошибки будем переносить дату вперёд для retry с backoff.
+   */
+  availableAt DateTime @default(now()) @map("available_at") @db.Timestamptz(6)
+
+  /**
+   * null означает, что сообщение ещё требуется опубликовать.
+   * После Kafka acknowledgement здесь появится время публикации.
+   */
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+
+  // Short lease prevents two application replicas from publishing the same
+  // pending row concurrently. Expired claims can be safely taken over.
+  claimedAt  DateTime? @map("claimed_at") @db.Timestamptz(6)
+  claimToken String?   @map("claim_token") @db.Uuid
+
+  // Последняя ошибка нужна для диагностики, но не должна содержать секреты.
+  lastError String? @map("last_error") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Основной запрос publisher:
+  // publishedAt IS NULL AND availableAt <= now().
+  @@index([publishedAt, availableAt, claimedAt, createdAt])
+  // Позволяет найти все события конкретного бизнес-объекта.
+  @@index([aggregateType, aggregateId])
+  @@map("outbox_messages")
+}
