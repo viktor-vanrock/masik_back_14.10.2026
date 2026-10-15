@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -183,15 +184,33 @@ export class ConversationsService implements OnModuleDestroy {
     id: string,
     user: RequestUser,
     data: { title?: string; isArchived?: boolean },
-  ): Promise<Conversation> {
-    const conversation = await this.repository.findById(id, user.id);
-    if (!conversation || conversation.userId !== user.id) {
+  ) {
+    const conversation = await this.repository.findByIdUnsafe(id);
+    if (!conversation) {
       throw new NotFoundException(`Conversation "${id}" was not found`);
     }
-    return this.repository.update(id, {
-      ...(data.title !== undefined ? { title: data.title.slice(0, 255) } : {}),
-      ...(data.isArchived !== undefined ? { isArchived: data.isArchived } : {}),
-    });
+    if (conversation.userId !== user.id) {
+      throw new ForbiddenException(`Access denied to conversation "${id}"`);
+    }
+
+    const updateData: { title?: string; isArchived?: boolean } = {};
+    if (data.title !== undefined) updateData.title = data.title;
+    if (data.isArchived !== undefined) updateData.isArchived = data.isArchived;
+
+    try {
+      const updated = await this.repository.update(id, user.id, updateData);
+      const { agentContext, ...rest } = updated;
+      void agentContext;
+      return rest;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Conversation "${id}" was not found`);
+      }
+      throw error;
+    }
   }
 
   async getAgentContext(id: string) {

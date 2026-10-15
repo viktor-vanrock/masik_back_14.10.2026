@@ -6,6 +6,7 @@ import {
   ConversationStatus,
   MessageKind,
   MessageRole,
+  Prisma,
 } from '@/generated/prisma/client';
 import { HypothesesService } from '@/hypotheses/hypotheses.service';
 import { RecommendationRequestsService } from '@/recommendations/recommendation-requests.service';
@@ -18,8 +19,10 @@ describe('ConversationsService recommendation/interviewer boundary', () => {
     createConversation: jest.fn(),
     findAll: jest.fn(),
     findById: jest.fn(),
+    findByIdUnsafe: jest.fn(),
     findByIdWithMessages: jest.fn(),
     updateIntent: jest.fn(),
+    update: jest.fn(),
     updateStatus: jest.fn(),
     createMessage: jest.fn(),
     completeWithRecommendation: jest.fn(),
@@ -55,6 +58,44 @@ describe('ConversationsService recommendation/interviewer boundary', () => {
 
   afterEach(async () => {
     await service.onModuleDestroy();
+  });
+
+  describe('updateConversation', () => {
+    const actor = { id: 'user-id', username: 'user', role: Role.User };
+
+    it('updates title for the conversation owner', async () => {
+      const conversation = conversationRecord();
+      const { agentContext, ...updated } = conversationRecord({ title: 'Updated' });
+      void agentContext;
+      repository.findByIdUnsafe.mockResolvedValue(conversation);
+      repository.update.mockResolvedValue(updated);
+
+      await expect(service.updateConversation(conversation.id, actor, { title: 'Updated' }))
+        .resolves.toEqual(updated);
+      expect(repository.update).toHaveBeenCalledWith(conversation.id, actor.id, { title: 'Updated' });
+    });
+
+    it('throws NotFoundException when conversation does not exist', async () => {
+      repository.findByIdUnsafe.mockResolvedValue(null);
+      await expect(service.updateConversation('missing-id', actor, { title: 'Updated' }))
+        .rejects.toThrow('Conversation "missing-id" was not found');
+    });
+
+    it('throws ForbiddenException when user is not the owner', async () => {
+      repository.findByIdUnsafe.mockResolvedValue(conversationRecord({ userId: 'other-user' }));
+      await expect(service.updateConversation(conversationRecord().id, actor, { title: 'Updated' }))
+        .rejects.toThrow('Access denied to conversation');
+    });
+
+    it('handles Prisma P2025 as NotFoundException', async () => {
+      const conversation = conversationRecord();
+      repository.findByIdUnsafe.mockResolvedValue(conversation);
+      repository.update.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('missing record', {
+        code: 'P2025', clientVersion: 'test',
+      }));
+      await expect(service.updateConversation(conversation.id, actor, { title: 'Updated' }))
+        .rejects.toThrow(`Conversation "${conversation.id}" was not found`);
+    });
   });
 
   it('scopes ordinary HTTP list reads to the authenticated owner', async () => {

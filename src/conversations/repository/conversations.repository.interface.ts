@@ -39,8 +39,11 @@ export abstract class IConversationsRepository {
     userId: string,
   ): Promise<Nullable<Conversation>>;
 
+  abstract findByIdUnsafe(id: string): Promise<Conversation | null>;
+
   abstract update(
     id: string,
+    userId: string,
     data: { title?: string; isArchived?: boolean },
   ): Promise<Conversation>;
 

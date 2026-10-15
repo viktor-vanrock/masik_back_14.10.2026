@@ -83,12 +83,17 @@ export class ConversationsRepository implements IConversationsRepository {
     });
   }
 
+  async findByIdUnsafe(id: string): Promise<Conversation | null> {
+    return this.prisma.conversation.findUnique({ where: { id } });
+  }
+
   async update(
     id: string,
+    userId: string,
     data: { title?: string; isArchived?: boolean },
   ): Promise<Conversation> {
     return this.prisma.conversation.update({
-      where: { id },
+      where: { id, userId },
       data,
     });
   }

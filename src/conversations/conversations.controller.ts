@@ -4,6 +4,7 @@ import { AUTH_COOKIE_NAME } from '@/auth/cookie/authCookie';
 import { CurrentUser } from '@/common/decorators/currentUser.decorator';
 import { PaginationDto } from '@/common/dtos/paginationDto.dto';
 import { ConversationsService } from './conversations.service';
+import { UpdateConversationDto } from './dto/updateConversation.dto';
 import type { RequestUser } from '@/common/types/request.type';
 
 @ApiCookieAuth(AUTH_COOKIE_NAME)
@@ -49,10 +50,8 @@ export class ConversationsController {
   async update(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @CurrentUser() user: RequestUser,
-    @Body() body: { title?: string; isArchived?: boolean },
+    @Body() body: UpdateConversationDto,
   ) {
-    const { agentContext, ...conversation } = await this.service.updateConversation(id, user, body);
-    void agentContext;
-    return conversation;
+    return this.service.updateConversation(id, user, body);
   }
 }
