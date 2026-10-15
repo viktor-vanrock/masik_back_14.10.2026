@@ -30,6 +30,8 @@ model Conversation {
   userId String              @map("user_id") @db.VarChar(160)
   status ConversationStatus  @default(active)
   intent ConversationIntent?
+  title String? @db.VarChar(255)
+  isArchived Boolean @default(false) @map("is_archived")
   agentContext Json? @map("agent_context") @db.JsonB
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

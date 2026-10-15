@@ -83,6 +83,16 @@ export class ConversationsRepository implements IConversationsRepository {
     });
   }
 
+  async update(
+    id: string,
+    data: { title?: string; isArchived?: boolean },
+  ): Promise<Conversation> {
+    return this.prisma.conversation.update({
+      where: { id },
+      data,
+    });
+  }
+
   private assertOwnerId(userId: string): void {
     if (!userId) {
       throw new Error('Conversation owner ID is required');

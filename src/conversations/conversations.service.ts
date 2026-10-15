@@ -179,6 +179,21 @@ export class ConversationsService implements OnModuleDestroy {
     return conversation;
   }
 
+  async updateConversation(
+    id: string,
+    user: RequestUser,
+    data: { title?: string; isArchived?: boolean },
+  ): Promise<Conversation> {
+    const conversation = await this.repository.findById(id, user.id);
+    if (!conversation || conversation.userId !== user.id) {
+      throw new NotFoundException(`Conversation "${id}" was not found`);
+    }
+    return this.repository.update(id, {
+      ...(data.title !== undefined ? { title: data.title.slice(0, 255) } : {}),
+      ...(data.isArchived !== undefined ? { isArchived: data.isArchived } : {}),
+    });
+  }
+
   async getAgentContext(id: string) {
     const conversation = await this.repository.getAgentContext(id);
     if (!conversation) throw new NotFoundException(`Conversation "${id}" was not found`);

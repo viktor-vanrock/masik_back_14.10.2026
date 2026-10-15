@@ -39,6 +39,11 @@ export abstract class IConversationsRepository {
     userId: string,
   ): Promise<Nullable<Conversation>>;
 
+  abstract update(
+    id: string,
+    data: { title?: string; isArchived?: boolean },
+  ): Promise<Conversation>;
+
   abstract createMessage(data: CreateMessageInput): Promise<Message>;
 
   /** Service-token-only context access; public reads always require owner ID. */
