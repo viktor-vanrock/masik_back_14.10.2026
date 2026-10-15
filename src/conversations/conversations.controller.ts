@@ -1,9 +1,10 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query } from '@nestjs/common';
 import { ApiCookieAuth, ApiOkResponse, ApiOperation } from '@nestjs/swagger';
 import { AUTH_COOKIE_NAME } from '@/auth/cookie/authCookie';
 import { CurrentUser } from '@/common/decorators/currentUser.decorator';
 import { PaginationDto } from '@/common/dtos/paginationDto.dto';
 import { ConversationsService } from './conversations.service';
+import { UpdateConversationDto } from './dto/updateConversation.dto';
 import type { RequestUser } from '@/common/types/request.type';
 
 @ApiCookieAuth(AUTH_COOKIE_NAME)
@@ -40,5 +41,17 @@ export class ConversationsController {
     const { agentContext, ...conversation } = await this.service.findByIdWithMessages(id, user);
     void agentContext;
     return conversation;
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Update conversation title and archive status',
+  })
+  async update(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @CurrentUser() user: RequestUser,
+    @Body() body: UpdateConversationDto,
+  ) {
+    return this.service.updateConversation(id, user, body);
   }
 }

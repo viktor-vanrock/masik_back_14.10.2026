@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PaginationDto } from '@/common/dtos/paginationDto.dto';
 import { InfiniteDataResponseType } from '@/common/types/infiniteDataResponse.type';
 import {
@@ -80,6 +80,27 @@ export class ConversationsRepository implements IConversationsRepository {
     this.assertOwnerId(userId);
     return this.prisma.conversation.findFirst({
       where: { id, userId },
+    });
+  }
+
+  async findByIdUnsafe(id: string): Promise<Conversation | null> {
+    return this.prisma.conversation.findUnique({ where: { id } });
+  }
+
+  async update(
+    id: string,
+    userId: string,
+    data: { title?: string; isArchived?: boolean },
+  ): Promise<Conversation> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id },
+    });
+    if (!conversation || conversation.userId !== userId) {
+      throw new NotFoundException(`Conversation "${id}" was not found`);
+    }
+    return this.prisma.conversation.update({
+      where: { id },
+      data,
     });
   }
 

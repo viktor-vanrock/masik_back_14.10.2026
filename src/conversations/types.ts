@@ -39,6 +39,13 @@ export const conversationFullInclude = {
       updatedAt: true,
     },
   },
+  catalogSubmission: {
+    select: {
+      id: true,
+      status: true,
+      submittedAt: true,
+    },
+  },
 } satisfies Prisma.ConversationInclude;
 
 export type ConversationWithMessages = Prisma.ConversationGetPayload<{
