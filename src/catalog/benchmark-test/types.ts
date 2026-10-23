@@ -6,7 +6,11 @@ export type ModelScoreType = {
   metricId?: string;
   metricName?: string;
   score: number;
+  auqtc?: number;
+  tokensPerSec?: number;
   isOpenSource: boolean;
+  architecture?: string;
+  sourceMode?: string;
   isHumanBaseline?: boolean;
   obtainedAt?: string;
 };

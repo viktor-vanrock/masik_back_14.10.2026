@@ -50,7 +50,7 @@ export class ConversationsController {
   async update(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @CurrentUser() user: RequestUser,
-    @Body() body: UpdateConversationDto,
+    @Body() body: UpdateConversationDto
   ) {
     return this.service.updateConversation(id, user, body);
   }

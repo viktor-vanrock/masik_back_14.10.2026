@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsIn,
   MaxLength,
 } from 'class-validator';
 
@@ -87,4 +88,9 @@ export class CreateMetricResultDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ enum: ['benchmark', 'stress', 'production', 'comparison', 'harness'] })
+  @IsOptional()
+  @IsIn(['benchmark', 'stress', 'production', 'comparison', 'harness'])
+  sourceMode?: 'benchmark' | 'stress' | 'production' | 'comparison' | 'harness';
 }

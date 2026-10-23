@@ -12,6 +12,7 @@ describe('MetricsRepository', () => {
   const countResultsInTx = jest.fn();
   const advisoryLock = jest.fn();
   const transaction = jest.fn();
+  const upsertModel = jest.fn();
 
   const tx = {
     catalogTestProjection: { findFirst: findTest },
@@ -24,6 +25,7 @@ describe('MetricsRepository', () => {
   };
 
   const prisma = {
+    model: { upsert: upsertModel },
     catalogTestProjection: { findFirst: findTest },
     catalogBenchmarkProjection: { findFirst: findSuite },
     metricResult: {
@@ -59,6 +61,21 @@ describe('MetricsRepository', () => {
       ) =>
         'function' === typeof work ? work(tx) : Promise.all(work)
     );
+  });
+
+  it('persists architecture and preserves it when an update omits architecture', async () => {
+    let stored: Record<string, unknown> | undefined;
+    upsertModel.mockImplementation(({ create, update }) => {
+      const defined = Object.fromEntries(Object.entries(update).filter(([, value]) => value !== undefined));
+      stored = stored ? { ...stored, ...defined } : create;
+      return stored;
+    });
+    await expect(repository.createModel({ id: 'diffusion', name: 'Diffusion', architecture: 'text-diffusion' }))
+      .resolves.toMatchObject({ architecture: 'text-diffusion' });
+    await expect(repository.createModel({ id: 'diffusion', name: 'Renamed' }))
+      .resolves.toMatchObject({ name: 'Renamed', architecture: 'text-diffusion' });
+    await expect(repository.createModel({ id: 'diffusion', name: 'Updated', architecture: 'omnimodal' }))
+      .resolves.toMatchObject({ architecture: 'omnimodal' });
   });
 
   it('returns a paginated metric result response', async () => {

@@ -14,6 +14,7 @@ model User {
   externalApiKeys        ExternalApiKey[]
   catalogEntriesAuthored CatalogEntry[]   @relation("CatalogEntryAuthor")
   catalogEntriesReviewed CatalogEntry[]   @relation("CatalogEntryReviewer")
+  leaderboardBoards      LeaderboardBoard[]
 
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)

@@ -90,7 +90,7 @@ export class ConversationsRepository implements IConversationsRepository {
   async update(
     id: string,
     userId: string,
-    data: { title?: string; isArchived?: boolean },
+    data: { title?: string; isArchived?: boolean }
   ): Promise<Conversation> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },

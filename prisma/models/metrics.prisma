@@ -34,6 +34,7 @@ model Model {
   name         String  @db.VarChar(255)
   provider     String? @db.VarChar(255)
   isOpenSource Boolean @default(false) @map("is_open_source")
+  architecture String? @db.VarChar(64)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -42,6 +43,7 @@ model Model {
   metricUploadRows MetricUploadRow[]
 
   @@index([provider])
+  @@index([architecture], map: "models_architecture_idx")
   @@map("models")
 }
 
@@ -101,6 +103,7 @@ model MetricResult {
   rawMetricName    String? @map("raw_metric_name") @db.VarChar(255)
 
   metadata Json @default("{}") @db.JsonB
+  sourceMode String @default("benchmark") @map("source_mode") @db.VarChar(32)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -108,6 +111,7 @@ model MetricResult {
   uploadRows MetricUploadRow[]
 
   @@index([benchmarkId, testId, metricId, modelId, obtainedAt])
+  @@index([sourceMode], map: "metric_results_source_mode_idx")
   @@map("metric_results")
 }
 

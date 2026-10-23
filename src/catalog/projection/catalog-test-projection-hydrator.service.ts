@@ -26,12 +26,20 @@ type CatalogEntryRow = {
 
 const metricResultInclude = {
   metric: { select: { id: true, name: true } },
-  model: { select: { id: true, name: true, isOpenSource: true } },
+  model: { select: { id: true, name: true, isOpenSource: true, architecture: true } },
 } satisfies Prisma.MetricResultInclude;
 
 type MetricResultRow = Prisma.MetricResultGetPayload<{
   include: typeof metricResultInclude;
 }>;
+
+function finiteMetadataNumber(value: unknown): number | undefined {
+  if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) {
+    return undefined;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
 
 @Injectable()
 export class CatalogTestProjectionHydrator {
@@ -292,15 +300,22 @@ export class CatalogTestProjectionHydrator {
     const scores = new Map<string, ModelScoreType>();
     for (const result of results) {
       if ('human' === result.modelId.toLocaleLowerCase()) continue;
-      const key = `${result.modelId}:${result.metricId}`;
+      const key = `${result.modelId}:${result.metricId}:${result.sourceMode}`;
       if (scores.has(key)) continue;
+      const metadata = result.metadata as Record<string, unknown>;
+      const auqtc = finiteMetadataNumber(metadata.auqtc);
+      const tokensPerSec = finiteMetadataNumber(metadata.tokensPerSec);
       scores.set(key, {
         modelId: result.modelId,
         modelName: result.model.name,
         metricId: result.metricId,
         metricName: result.metric.name,
         score: Number(result.value),
+        ...(auqtc !== undefined ? { auqtc } : {}),
+        ...(tokensPerSec !== undefined ? { tokensPerSec } : {}),
         isOpenSource: result.model.isOpenSource,
+        ...(result.model.architecture ? { architecture: result.model.architecture } : {}),
+        sourceMode: result.sourceMode,
         isHumanBaseline: false,
         obtainedAt: result.obtainedAt.toISOString(),
       });

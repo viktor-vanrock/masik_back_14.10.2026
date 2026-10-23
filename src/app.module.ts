@@ -21,6 +21,7 @@ import { ConversationsModule } from '@/conversations/conversations.module';
 import { GenerationModule } from '@/generation/generation.module';
 import { HealthModule } from '@/health/health.module';
 import { HypothesesModule } from '@/hypotheses/hypotheses.module';
+import { LeaderboardBoardsModule } from '@/leaderboard-boards/leaderboard-boards.module';
 import { MetricsModule } from '@/metrics/metrics.module';
 import { PrismaModule } from '@/prisma/prisma.module';
 import { UsersModule } from '@/users/users.module';
@@ -53,6 +54,7 @@ import { ExternalApiModule } from './external-api/external-api.module';
     ExternalApiModule,
     HypothesesModule,
     HealthModule,
+    LeaderboardBoardsModule,
     ConversationsModule,
     GenerationModule,
   ],

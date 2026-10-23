@@ -340,8 +340,11 @@ describe('Metrics HTTP contract (e2e)', () => {
         name: 'Original Model',
         provider: 'Original Provider',
         isOpenSource: false,
+        architecture: 'text-diffusion',
       })
       .expect(201);
+    expect(await prisma.model.findUniqueOrThrow({ where: { id: 'model-stable-id' } }))
+      .toMatchObject({ architecture: 'text-diffusion' });
     await request(app.getHttpServer())
       .post('/api/metrics/models')
       .set('Origin', E2E_ORIGIN)
@@ -363,6 +366,7 @@ describe('Metrics HTTP contract (e2e)', () => {
         name: 'Renamed Model',
         provider: 'New Provider',
         isOpenSource: true,
+        architecture: 'text-diffusion',
       }),
     ]);
     expect(await prisma.model.count()).toBe(1);
