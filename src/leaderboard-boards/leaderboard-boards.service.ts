@@ -62,11 +62,12 @@ export class LeaderboardBoardsService {
   async create(userId: string, dto: CreateLeaderboardBoardDto) {
     const name = this.name(dto.name);
     const description = this.description(dto.description);
-    await this.assertReferences(dto);
+    const benchmarkIds = dto.benchmarkIds?.map((id) => id.toLowerCase());
+    await this.assertReferences({ ...dto, benchmarkIds });
     return this.prisma.leaderboardBoard.create({ data: {
       userId, name, description,
       modelIds: dto.modelIds ?? [],
-      benchmarkIds: dto.benchmarkIds ?? [],
+      benchmarkIds: benchmarkIds ?? [],
       architectures: dto.architectures ?? [],
     } });
   }
@@ -75,17 +76,18 @@ export class LeaderboardBoardsService {
     if (!board) throw new NotFoundException('Leaderboard board was not found');
     const name = dto.name !== undefined ? this.name(dto.name) : undefined;
     const description = dto.description !== undefined ? this.description(dto.description) : undefined;
-    await this.assertReferences(dto);
+    const benchmarkIds = dto.benchmarkIds?.map((testId) => testId.toLowerCase());
+    await this.assertReferences({ ...dto, benchmarkIds });
     return this.prisma.leaderboardBoard.update({ where: { id }, data: {
       ...(name !== undefined ? { name } : {}),
       ...(description !== undefined ? { description } : {}),
       ...(dto.modelIds !== undefined ? { modelIds: dto.modelIds } : {}),
-      ...(dto.benchmarkIds !== undefined ? { benchmarkIds: dto.benchmarkIds } : {}),
+      ...(benchmarkIds !== undefined ? { benchmarkIds } : {}),
       ...(dto.architectures !== undefined ? { architectures: dto.architectures } : {}),
     } });
   }
   async remove(userId: string, id: string) {
-    await this.update(userId, id, {});
-    await this.prisma.leaderboardBoard.delete({ where: { id } });
+    const { count } = await this.prisma.leaderboardBoard.deleteMany({ where: { id, userId } });
+    if (0 === count) throw new NotFoundException('Leaderboard board was not found');
   }
 }
