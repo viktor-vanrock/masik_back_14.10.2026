@@ -65,24 +65,20 @@ describe('ConversationsRepository', () => {
     });
   });
 
-  it('loads every active pin, exactly one history page, and archived chats separately', async () => {
+  it('loads the next history page without repeating pins or archived chats', async () => {
     conversation.findMany
-      .mockResolvedValueOnce([{ id: 'pinned' }])
-      .mockResolvedValueOnce([{ id: 'history' }])
-      .mockResolvedValueOnce([{ id: 'archived' }]);
+      .mockResolvedValueOnce([{ id: 'history' }]);
     conversation.count.mockResolvedValue(41);
 
     await expect(repository.findSidebar(2, 'owner-id')).resolves.toEqual({
-      pinned: [{ id: 'pinned' }],
+      pinned: [],
       data: [{ id: 'history' }],
       total: 41,
-      archived: [{ id: 'archived' }],
+      pageSize: 20,
+      archived: [],
     });
-    expect(conversation.findMany).toHaveBeenNthCalledWith(1, {
-      where: { userId: 'owner-id', isArchived: false, pinnedDate: { not: null } },
-      orderBy: [{ pinnedDate: 'desc' }, { id: 'desc' }],
-    });
-    expect(conversation.findMany).toHaveBeenNthCalledWith(2, {
+    expect(conversation.findMany).toHaveBeenCalledTimes(1);
+    expect(conversation.findMany).toHaveBeenCalledWith({
       where: { userId: 'owner-id', isArchived: false, pinnedDate: null },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       skip: 20,
@@ -90,6 +86,22 @@ describe('ConversationsRepository', () => {
     });
     expect(conversation.count).toHaveBeenCalledWith({
       where: { userId: 'owner-id', isArchived: false, pinnedDate: null },
+    });
+  });
+
+  it('returns every active pin and archived chat with the first history page', async () => {
+    conversation.findMany
+      .mockResolvedValueOnce([{ id: 'history' }])
+      .mockResolvedValueOnce([{ id: 'pin' }])
+      .mockResolvedValueOnce([{ id: 'archive' }]);
+    conversation.count.mockResolvedValue(21);
+    await expect(repository.findSidebar(1, 'owner-id')).resolves.toEqual({
+      pinned: [{ id: 'pin' }], data: [{ id: 'history' }], total: 21,
+      pageSize: 20, archived: [{ id: 'archive' }],
+    });
+    expect(conversation.findMany).toHaveBeenCalledWith({
+      where: { userId: 'owner-id', isArchived: false, pinnedDate: { not: null } },
+      orderBy: [{ pinnedDate: 'desc' }, { id: 'desc' }],
     });
   });
 

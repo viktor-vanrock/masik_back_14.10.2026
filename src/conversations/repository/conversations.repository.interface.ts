@@ -33,6 +33,7 @@ export abstract class IConversationsRepository {
     pinned: Conversation[];
     data: Conversation[];
     total: number;
+    pageSize: number;
     archived: Conversation[];
   }>;
 

@@ -44,6 +44,7 @@ export class ConversationsController {
       pinned: result.pinned.map(publicConversation),
       data: result.data.map(publicConversation),
       total: result.total,
+      pageSize: result.pageSize,
       archived: result.archived.map(publicConversation),
     };
   }

@@ -69,24 +69,30 @@ export class ConversationsRepository implements IConversationsRepository {
     this.assertOwnerId(userId);
     const active = { userId, isArchived: false };
     const history = { ...active, pinnedDate: null };
+    const historyPage = this.prisma.conversation.findMany({
+      where: history,
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      skip: (page - 1) * 20,
+      take: 20,
+    });
+    const historyTotal = this.prisma.conversation.count({ where: history });
+    if (page > 1) {
+      const [data, total] = await this.prisma.$transaction([historyPage, historyTotal]);
+      return { pinned: [], data, total, pageSize: 20, archived: [] };
+    }
     const [pinned, data, total, archived] = await this.prisma.$transaction([
       this.prisma.conversation.findMany({
         where: { ...active, pinnedDate: { not: null } },
         orderBy: [{ pinnedDate: 'desc' }, { id: 'desc' }],
       }),
-      this.prisma.conversation.findMany({
-        where: history,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        skip: (page - 1) * 20,
-        take: 20,
-      }),
-      this.prisma.conversation.count({ where: history }),
+      historyPage,
+      historyTotal,
       this.prisma.conversation.findMany({
         where: { userId, isArchived: true },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       }),
     ]);
-    return { pinned, data, total, archived };
+    return { pinned, data, total, pageSize: 20, archived };
   }
 
   async findByIdWithMessages(
