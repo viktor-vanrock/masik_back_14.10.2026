@@ -183,7 +183,7 @@ export class ConversationsService implements OnModuleDestroy {
   async updateConversation(
     id: string,
     user: RequestUser,
-    data: { title?: string; isArchived?: boolean }
+    data: { title?: string; isArchived?: boolean; isPinned?: boolean }
   ) {
     const conversation = await this.repository.findByIdUnsafe(id);
     if (!conversation) {
@@ -193,9 +193,10 @@ export class ConversationsService implements OnModuleDestroy {
       throw new ForbiddenException(`Access denied to conversation "${id}"`);
     }
 
-    const updateData: { title?: string; isArchived?: boolean } = {};
+    const updateData: { title?: string; isArchived?: boolean; isPinned?: boolean } = {};
     if (data.title !== undefined) updateData.title = data.title;
     if (data.isArchived !== undefined) updateData.isArchived = data.isArchived;
+    if (data.isPinned !== undefined) updateData.isPinned = data.isPinned;
 
     try {
       const updated = await this.repository.update(id, user.id, updateData);

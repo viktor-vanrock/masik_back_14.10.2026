@@ -75,6 +75,18 @@ describe('ConversationsService recommendation/interviewer boundary', () => {
       expect(repository.update).toHaveBeenCalledWith(conversation.id, actor.id, { title: 'Updated' });
     });
 
+    it('persists pin changes for the conversation owner', async () => {
+      const conversation = conversationRecord();
+      const { agentContext, ...updated } = conversationRecord({ isPinned: true });
+      void agentContext;
+      repository.findByIdUnsafe.mockResolvedValue(conversation);
+      repository.update.mockResolvedValue(updated);
+
+      await expect(service.updateConversation(conversation.id, actor, { isPinned: true }))
+        .resolves.toEqual(updated);
+      expect(repository.update).toHaveBeenCalledWith(conversation.id, actor.id, { isPinned: true });
+    });
+
     it('throws NotFoundException when conversation does not exist', async () => {
       repository.findByIdUnsafe.mockResolvedValue(null);
       await expect(service.updateConversation('missing-id', actor, { title: 'Updated' }))
@@ -649,6 +661,7 @@ function conversationRecord(
     intent: null,
     title: null,
     isArchived: false,
+    isPinned: false,
     agentContext: null,
     createdAt: now,
     updatedAt: now,

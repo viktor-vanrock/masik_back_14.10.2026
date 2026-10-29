@@ -44,7 +44,7 @@ export abstract class IConversationsRepository {
   abstract update(
     id: string,
     userId: string,
-    data: { title?: string; isArchived?: boolean },
+    data: { title?: string; isArchived?: boolean; isPinned?: boolean },
   ): Promise<Conversation>;
 
   abstract createMessage(data: CreateMessageInput): Promise<Message>;

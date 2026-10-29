@@ -49,7 +49,7 @@ export class ConversationsRepository implements IConversationsRepository {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.conversation.findMany({
         where: { userId },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limit,
       }),
@@ -90,7 +90,7 @@ export class ConversationsRepository implements IConversationsRepository {
   async update(
     id: string,
     userId: string,
-    data: { title?: string; isArchived?: boolean }
+    data: { title?: string; isArchived?: boolean; isPinned?: boolean }
   ): Promise<Conversation> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },

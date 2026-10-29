@@ -15,7 +15,7 @@ export class ConversationsController {
   @Get()
   @ApiOperation({
     summary: 'List conversations',
-    description: 'Returns paginated conversations ordered by createdAt desc.',
+    description: 'Returns paginated conversations with pinned ones first, then by createdAt desc.',
   })
   @ApiOkResponse({ description: 'Paginated conversations response' })
   async findAll(
@@ -45,7 +45,7 @@ export class ConversationsController {
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update conversation title and archive status',
+    summary: 'Update conversation title, archive or pin status',
   })
   async update(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,

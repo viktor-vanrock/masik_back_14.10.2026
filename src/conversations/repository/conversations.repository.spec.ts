@@ -56,7 +56,7 @@ describe('ConversationsRepository', () => {
 
     expect(conversation.findMany).toHaveBeenCalledWith({
       where: { userId: 'owner-id' },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
       skip: 20,
       take: 10,
     });
