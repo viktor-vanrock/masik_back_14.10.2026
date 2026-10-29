@@ -56,12 +56,40 @@ describe('ConversationsRepository', () => {
 
     expect(conversation.findMany).toHaveBeenCalledWith({
       where: { userId: 'owner-id' },
-      orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ pinnedDate: { sort: 'desc', nulls: 'last' } }, { updatedAt: 'desc' }, { id: 'desc' }],
       skip: 20,
       take: 10,
     });
     expect(conversation.count).toHaveBeenCalledWith({
       where: { userId: 'owner-id' },
+    });
+  });
+
+  it('loads every active pin, exactly one history page, and archived chats separately', async () => {
+    conversation.findMany
+      .mockResolvedValueOnce([{ id: 'pinned' }])
+      .mockResolvedValueOnce([{ id: 'history' }])
+      .mockResolvedValueOnce([{ id: 'archived' }]);
+    conversation.count.mockResolvedValue(41);
+
+    await expect(repository.findSidebar(2, 'owner-id')).resolves.toEqual({
+      pinned: [{ id: 'pinned' }],
+      data: [{ id: 'history' }],
+      total: 41,
+      archived: [{ id: 'archived' }],
+    });
+    expect(conversation.findMany).toHaveBeenNthCalledWith(1, {
+      where: { userId: 'owner-id', isArchived: false, pinnedDate: { not: null } },
+      orderBy: [{ pinnedDate: 'desc' }, { id: 'desc' }],
+    });
+    expect(conversation.findMany).toHaveBeenNthCalledWith(2, {
+      where: { userId: 'owner-id', isArchived: false, pinnedDate: null },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      skip: 20,
+      take: 20,
+    });
+    expect(conversation.count).toHaveBeenCalledWith({
+      where: { userId: 'owner-id', isArchived: false, pinnedDate: null },
     });
   });
 

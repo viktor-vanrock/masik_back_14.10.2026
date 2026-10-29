@@ -29,6 +29,13 @@ export abstract class IConversationsRepository {
     userId: string,
   ): Promise<InfiniteDataResponseType<Conversation>>;
 
+  abstract findSidebar(page: number, userId: string): Promise<{
+    pinned: Conversation[];
+    data: Conversation[];
+    total: number;
+    archived: Conversation[];
+  }>;
+
   abstract findByIdWithMessages(
     id: string,
     userId: string,
@@ -44,7 +51,7 @@ export abstract class IConversationsRepository {
   abstract update(
     id: string,
     userId: string,
-    data: { title?: string; isArchived?: boolean; isPinned?: boolean },
+    data: { title?: string; isArchived?: boolean; pinnedDate?: Date | null },
   ): Promise<Conversation>;
 
   abstract createMessage(data: CreateMessageInput): Promise<Message>;

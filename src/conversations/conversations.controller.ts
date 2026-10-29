@@ -15,7 +15,7 @@ export class ConversationsController {
   @Get()
   @ApiOperation({
     summary: 'List conversations',
-    description: 'Returns paginated conversations with pinned ones first, then by createdAt desc.',
+    description: 'Returns paginated conversations with pinned ones first by pinnedDate, then others by updatedAt desc.',
   })
   @ApiOkResponse({ description: 'Paginated conversations response' })
   async findAll(
@@ -27,6 +27,25 @@ export class ConversationsController {
       void agentContext;
       return conversation;
     }) };
+  }
+
+  @Get('sidebar')
+  @ApiOperation({ summary: 'List all pinned chats, 20 unpinned chats per page, and archived chats' })
+  async findSidebar(
+    @Query() queryParams: PaginationDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const result = await this.service.findSidebar(queryParams.page, user);
+    const publicConversation = ({ agentContext, ...conversation }: (typeof result.data)[number]) => {
+      void agentContext;
+      return conversation;
+    };
+    return {
+      pinned: result.pinned.map(publicConversation),
+      data: result.data.map(publicConversation),
+      total: result.total,
+      archived: result.archived.map(publicConversation),
+    };
   }
 
   @Get(':id')

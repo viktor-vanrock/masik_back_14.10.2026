@@ -49,7 +49,7 @@ export class ConversationsRepository implements IConversationsRepository {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.conversation.findMany({
         where: { userId },
-        orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+        orderBy: [{ pinnedDate: { sort: 'desc', nulls: 'last' } }, { updatedAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limit,
       }),
@@ -63,6 +63,30 @@ export class ConversationsRepository implements IConversationsRepository {
     );
 
     return { data, total };
+  }
+
+  async findSidebar(page: number, userId: string) {
+    this.assertOwnerId(userId);
+    const active = { userId, isArchived: false };
+    const history = { ...active, pinnedDate: null };
+    const [pinned, data, total, archived] = await this.prisma.$transaction([
+      this.prisma.conversation.findMany({
+        where: { ...active, pinnedDate: { not: null } },
+        orderBy: [{ pinnedDate: 'desc' }, { id: 'desc' }],
+      }),
+      this.prisma.conversation.findMany({
+        where: history,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * 20,
+        take: 20,
+      }),
+      this.prisma.conversation.count({ where: history }),
+      this.prisma.conversation.findMany({
+        where: { userId, isArchived: true },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      }),
+    ]);
+    return { pinned, data, total, archived };
   }
 
   async findByIdWithMessages(
@@ -90,7 +114,7 @@ export class ConversationsRepository implements IConversationsRepository {
   async update(
     id: string,
     userId: string,
-    data: { title?: string; isArchived?: boolean; isPinned?: boolean }
+    data: { title?: string; isArchived?: boolean; pinnedDate?: Date | null }
   ): Promise<Conversation> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },

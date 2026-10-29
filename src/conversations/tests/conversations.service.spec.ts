@@ -18,6 +18,7 @@ describe('ConversationsService recommendation/interviewer boundary', () => {
   const repository = {
     createConversation: jest.fn(),
     findAll: jest.fn(),
+    findSidebar: jest.fn(),
     findById: jest.fn(),
     findByIdUnsafe: jest.fn(),
     findByIdWithMessages: jest.fn(),
@@ -77,14 +78,24 @@ describe('ConversationsService recommendation/interviewer boundary', () => {
 
     it('persists pin changes for the conversation owner', async () => {
       const conversation = conversationRecord();
-      const { agentContext, ...updated } = conversationRecord({ isPinned: true });
+      const { agentContext, ...updated } = conversationRecord({ pinnedDate: new Date() });
       void agentContext;
       repository.findByIdUnsafe.mockResolvedValue(conversation);
       repository.update.mockResolvedValue(updated);
 
       await expect(service.updateConversation(conversation.id, actor, { isPinned: true }))
         .resolves.toEqual(updated);
-      expect(repository.update).toHaveBeenCalledWith(conversation.id, actor.id, { isPinned: true });
+      expect(repository.update).toHaveBeenCalledWith(conversation.id, actor.id, { pinnedDate: expect.any(Date) });
+    });
+
+    it('clears the pin date when the owner unpins a conversation', async () => {
+      const conversation = conversationRecord({ pinnedDate: new Date('2026-10-29T12:00:00.000Z') });
+      repository.findByIdUnsafe.mockResolvedValue(conversation);
+      repository.update.mockResolvedValue({ ...conversation, pinnedDate: null });
+
+      await service.updateConversation(conversation.id, actor, { isPinned: false });
+
+      expect(repository.update).toHaveBeenCalledWith(conversation.id, actor.id, { pinnedDate: null });
     });
 
     it('throws NotFoundException when conversation does not exist', async () => {
@@ -661,7 +672,7 @@ function conversationRecord(
     intent: null,
     title: null,
     isArchived: false,
-    isPinned: false,
+    pinnedDate: null,
     agentContext: null,
     createdAt: now,
     updatedAt: now,

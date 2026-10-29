@@ -32,7 +32,7 @@ model Conversation {
   intent ConversationIntent?
   title String? @db.VarChar(255)
   isArchived Boolean @default(false) @map("is_archived")
-  isPinned Boolean @default(false) @map("is_pinned")
+  pinnedDate DateTime? @map("pinned_date") @db.Timestamptz(6)
   agentContext Json? @map("agent_context") @db.JsonB
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
