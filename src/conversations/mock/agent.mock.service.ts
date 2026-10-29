@@ -17,11 +17,17 @@ const SessionStep = {
   AwaitDomain: 'await_domain',
   AwaitDifficulty: 'await_difficulty',
   AwaitDatasetSize: 'await_dataset_size',
+  AwaitRevisionConfirmation: 'await_revision_confirmation',
+  AwaitRevision: 'await_revision',
+  Producing: 'producing',
   Closed: 'closed',
 } as const;
 
 type SessionState = Pick<SessionStateAgentWsService, 'emitter'> & {
   step: typeof SessionStep[keyof typeof SessionStep];
+  revisionSourceText?: string;
+  productionTimer?: ReturnType<typeof setTimeout>;
+  productionExamples?: Array<{ input: string; expectedOutput: string }>;
 };
 
 /**
@@ -81,6 +87,7 @@ export class AgentMockService implements IAgentService {
     const session = this.sessions.get(conversationId);
     if (!session) return;
 
+    if (session.productionTimer) clearTimeout(session.productionTimer);
     session.emitter.removeAllListeners();
     session.step = SessionStep.Closed;
     this.sessions.delete(conversationId);
@@ -114,6 +121,43 @@ export class AgentMockService implements IAgentService {
     history: HistoryEntry[],
     session: SessionState
   ): void {
+    if (history.some((entry) => 'agent' === entry.role && entry.content.label.startsWith('MOCK_SET_READY:'))) {
+      session.step = SessionStep.Closed;
+      return;
+    }
+    const lastUserMessage = [...history].reverse().find((entry) => 'user' === entry.role && entry.content.kind === MessageKind.text);
+    if ('user' === lastUserMessage?.role && lastUserMessage.content.kind === MessageKind.text &&
+      lastUserMessage.content.label.startsWith('Масштабировать выбранные примеры:')) {
+      session.step = SessionStep.Producing;
+      session.productionExamples = this.parseSelectedExamples(lastUserMessage.content.label);
+      const initialRequest = history.find((entry) => 'user' === entry.role && entry.content.kind === MessageKind.text && entry.content.label.includes('ID исходного бенчмарка:'));
+      if ('user' === initialRequest?.role && initialRequest.content.kind === MessageKind.text) {
+        session.revisionSourceText = initialRequest.content.label;
+      }
+      this.finishMockProduction(conversationId, session);
+      return;
+    }
+    const revisionRequest = history.findLast((entry) =>
+      'user' === entry.role && entry.content.kind === MessageKind.text &&
+      entry.content.label.includes('ID исходного бенчмарка:') &&
+      entry.content.label.includes('Что изменить:')
+    );
+    if ('user' === revisionRequest?.role && revisionRequest.content.kind === MessageKind.text) {
+      session.step = history.some((entry) => 'agent' === entry.role && entry.content.label.startsWith('MOCK_GENERATED_EXAMPLES:'))
+        ? SessionStep.AwaitRevision : SessionStep.AwaitRevisionConfirmation;
+      session.revisionSourceText = revisionRequest.content.label;
+      const last = history.at(-1);
+      if (session.step === SessionStep.AwaitRevision) return;
+      if ('agent' === last?.role && last.content.label.includes('Требования подтверждены.')) {
+        session.step = SessionStep.Closed;
+        return;
+      }
+      if (last?.role !== 'agent' || !last.content.label.includes('Всё готово к подтверждению')) {
+        this.emit(conversationId, this.revisionSummary(revisionRequest.content.label));
+      }
+      return;
+    }
+
     const userAnswers = history.filter(
       (entry) =>
         'user' === entry.role &&
@@ -163,6 +207,36 @@ export class AgentMockService implements IAgentService {
       return;
     }
 
+    if (data.content.kind === MessageKind.text &&
+      data.content.label.includes('ID исходного бенчмарка:') &&
+      data.content.label.includes('Что изменить:')) {
+      session.step = SessionStep.AwaitRevisionConfirmation;
+      session.revisionSourceText = data.content.label;
+      this.emit(conversationId, this.revisionSummary(data.content.label));
+      return;
+    }
+
+    if (session.step === SessionStep.AwaitRevisionConfirmation && data.content.kind === MessageKind.text) {
+      if (/требования подтверждаю|начни генерацию/i.test(data.content.label)) {
+        session.step = SessionStep.AwaitRevision;
+        this.emit(conversationId, this.revisionExamples(session.revisionSourceText ?? ''));
+      } else {
+        this.emit(conversationId, this.revisionSummary(session.revisionSourceText ?? data.content.label, data.content.label));
+      }
+      return;
+    }
+
+    if (session.step === SessionStep.AwaitRevision && data.content.kind === MessageKind.text) {
+      if (data.content.label.startsWith('Масштабировать выбранные примеры:')) {
+        session.step = SessionStep.Producing;
+        session.productionExamples = this.parseSelectedExamples(data.content.label);
+        this.finishMockProduction(conversationId, session);
+      } else {
+        this.emit(conversationId, this.revisionExamples(session.revisionSourceText ?? '', data.content.label));
+      }
+      return;
+    }
+
     switch (session.step) {
       case SessionStep.AwaitInitialText:
         session.step = SessionStep.AwaitDomain;
@@ -207,6 +281,84 @@ export class AgentMockService implements IAgentService {
         options: null,
       },
     };
+  }
+
+  private revisionSummary(text: string, correction?: string): AgentMessagePayload {
+    const field = (pattern: RegExp) => text.match(pattern)?.[1]?.trim() || 'Не указано';
+    const mode = /русскоязычной адаптации/i.test(text) ? 'Русифицировать' : 'Улучшить';
+    const name = field(/бенчмарка «([^»]+)»/);
+    const change = [field(/Что изменить: ([\s\S]*?)(?:\n\nТест: |\n\nПример \d+ из |$)/), correction].filter(Boolean).join('; ');
+    const rows = [
+      'Всё готово к подтверждению',
+      'Проверьте требования:',
+      `Способ создания: ${mode}`,
+      `Исходный набор: ${name}`,
+      `Задача: ${field(/Описание: ([^\n]+)/)}`,
+      `Название: ${name}`,
+      `Домен: ${field(/Домены: ([^\n]+)/)}`,
+      `Язык: ${'Русифицировать' === mode ? 'Русский' : field(/Язык: ([^\n]+)/)}`,
+      `Сложность: ${field(/Сложность: ([^\n]+)/)}`,
+      `Метрика: ${field(/Метрики: ([^\n]+)/)}`,
+      `Формат ответа: ${field(/Формат ответа: ([^\n]+)/)}`,
+      `Что изменить: ${change}`,
+    ];
+    return {
+      type: AgentMessageType.Question,
+      isFinal: true,
+      content: { kind: 'question', label: rows.join('\n'), options: null },
+    };
+  }
+
+  private revisionExamples(source: string, revision?: string): AgentMessagePayload {
+    const samples = [...source.matchAll(/Пример \d+ из «[^»]+»: ([\s\S]*?)(?=\n\nПример \d+ из |$)/g)]
+      .slice(0, 3)
+      .map((match) => {
+        const [input, expectedOutput] = match[1].split('\nЭталон: ');
+        return { input: input.trim(), expectedOutput: expectedOutput?.trim() || 'Уточните эталонный ответ.' };
+      });
+    const change = source.match(/Что изменить: ([^\n]+)/)?.[1]?.trim() || 'проверьте указанную задачу';
+    while (samples.length < 3) {
+      const index = samples.length + 1;
+      samples.push({
+        input: `Пример ${index}: ${change}`,
+        expectedOutput: 'Укажите проверяемый эталонный ответ.',
+      });
+    }
+    if (revision) samples[0].input = `${samples[0].input}\nУточнение: ${revision}`;
+    return {
+      type: AgentMessageType.Message,
+      isFinal: false,
+      content: { kind: 'text', label: `MOCK_GENERATED_EXAMPLES:${JSON.stringify(samples)}` },
+    };
+  }
+
+  private finishMockProduction(conversationId: string, session: SessionState): void {
+    if (session.productionTimer) return;
+    session.productionTimer = setTimeout(() => {
+      session.productionTimer = undefined;
+      if (this.sessions.get(conversationId) !== session || session.step !== SessionStep.Producing) return;
+      session.step = SessionStep.Closed;
+      const source = session.revisionSourceText ?? '';
+      const name = source.match(/бенчмарка «([^»]+)»/)?.[1] || 'Новый набор';
+      const examples = session.productionExamples ?? [];
+      this.emit(conversationId, {
+        type: AgentMessageType.Result,
+        isFinal: true,
+        content: { kind: 'result', label: `MOCK_SET_READY:${JSON.stringify({ name, examples, sourceId: source.match(/ID исходного бенчмарка: ([^\n]+)/)?.[1] ?? null })}`, status: 'done' },
+      });
+    }, 15000);
+  }
+
+  private parseSelectedExamples(label: string): Array<{ input: string; expectedOutput: string }> {
+    try {
+      const rows: unknown = JSON.parse(label.slice('Масштабировать выбранные примеры:'.length).trim());
+      if (!Array.isArray(rows)) return [];
+      return rows.filter((row): row is { input: string; expectedOutput: string } =>
+        'object' === typeof row && row !== null && 'string' === typeof row.input && 'string' === typeof row.expectedOutput
+      ).map(({ input, expectedOutput }) => ({ input, expectedOutput }));
+    } catch {
+      return [];
+    }
   }
 
   private domainQuestion(): AgentMessagePayload {

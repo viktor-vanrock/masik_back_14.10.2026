@@ -183,7 +183,7 @@ export class ConversationsService implements OnModuleDestroy {
   async updateConversation(
     id: string,
     user: RequestUser,
-    data: { title?: string; isArchived?: boolean },
+    data: { title?: string; isArchived?: boolean }
   ) {
     const conversation = await this.repository.findByIdUnsafe(id);
     if (!conversation) {
@@ -205,7 +205,7 @@ export class ConversationsService implements OnModuleDestroy {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
+        'P2025' === error.code
       ) {
         throw new NotFoundException(`Conversation "${id}" was not found`);
       }
@@ -501,7 +501,7 @@ export class ConversationsService implements OnModuleDestroy {
         this.agent.send(params.conversationId, { type: 'message',
           content: { kind: 'recommendation_rejected', testId: params.rejectedTestId } });
       } else {
-        await this.sendUserMessage({ ...params, kind: 'text', value: 'Хочу создать свой бенчмарк.' });
+        await this.sendUserMessage({ ...params, kind: 'text', value: params.initialMessage?.trim() || 'Хочу создать свой бенчмарк.' });
       }
     }
   }

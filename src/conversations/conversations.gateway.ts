@@ -238,6 +238,7 @@ export class ConversationsGateway implements
       await this.service.startBenchmarkCreation({
         userId: user.id,
         conversationId: body.conversationId,
+        initialMessage: body.initialMessage,
         onAgent: (payload) => this.pushAgentMessage(client, payload),
         onHypotheses: (generation) =>
           this.pushHypothesesGenerated(client, generation),

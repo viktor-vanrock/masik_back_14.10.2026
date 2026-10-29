@@ -179,6 +179,7 @@ export type RequestRecommendationsParams = {
 export type StartBenchmarkCreationParams = {
   userId: string;
   conversationId: string;
+  initialMessage?: string;
   rejectedTestId?: string;
   onAgent: AgentMessageHandler;
   onHypotheses?: HypothesesGeneratedHandler;

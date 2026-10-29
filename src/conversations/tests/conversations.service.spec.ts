@@ -647,6 +647,8 @@ function conversationRecord(
     userId: 'user-id',
     status: ConversationStatus.active,
     intent: null,
+    title: null,
+    isArchived: false,
     agentContext: null,
     createdAt: now,
     updatedAt: now,

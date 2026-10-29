@@ -251,11 +251,13 @@ export class MetricsRepository implements IMetricsRepository {
         name: data.name,
         provider: data.provider,
         isOpenSource: data.isOpenSource ?? false,
+        architecture: data.architecture,
       },
       update: {
         name: data.name,
         provider: data.provider,
         isOpenSource: data.isOpenSource ?? false,
+        architecture: data.architecture,
       },
     });
   }
@@ -306,6 +308,7 @@ export class MetricsRepository implements IMetricsRepository {
           obtainedAt: data.obtainedAt ? new Date(data.obtainedAt) : new Date(),
           importSource: data.importSource,
           metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
+          sourceMode: data.sourceMode ?? 'benchmark',
         },
         include: {
           metric: {

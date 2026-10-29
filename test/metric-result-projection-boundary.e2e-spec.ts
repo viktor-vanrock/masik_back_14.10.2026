@@ -1,6 +1,8 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { BENCHMARK_MESSAGE_TYPES } from '@/benchmark-service/contracts/benchmark-integration.v1';
+import { BenchmarkTestReadScope } from '@/catalog/benchmark-test/benchmark-test-read-scope';
+import { CatalogTestProjectionHydrator } from '@/catalog/projection/catalog-test-projection-hydrator.service';
 import { Role } from '@/common/enums/role.enum';
 import { BenchmarkValidationStatus } from '@/generated/prisma/client';
 import { KAFKA_TOPICS } from '@/kafka/kafka.constants';
@@ -83,6 +85,43 @@ describe('MetricResult benchmark-service boundary (e2e)', () => {
 
     await expect(prisma.metricResult.count()).resolves.toBe(0);
     await expect(lockCommandCount()).resolves.toBe(0);
+  });
+
+  it('exposes a fresh benchmark and an older harness result together in the catalog projection', async () => {
+    const metricId = await seedPublishedProjection();
+    await prisma.catalogTestProjection.update({
+      where: { testId },
+      data: { snapshot: {
+        id: testId, aggregateVersion: 7,
+        specification: {
+          suiteId: benchmarkId, name: 'Mode Test', nameEn: 'Mode Test', description: 'Source mode projection test',
+          subGroupIds: [], abilityTaxonIds: [], modalityIds: [], capabilityIds: [],
+          domainIds: [], subdomainIds: [], abilityTags: [], skills: [], metricIds: [metricId],
+          examples: [], datasetSubsamples: [], references: [], links: [],
+          sizeInSamples: 100, medianSampleSizeWords: 10,
+          requestLengthDist: { min: 1, median: 2, max: 3 },
+          responseLengthDist: { min: 1, median: 2, max: 3 },
+          isDifficultyAutoCalculated: false, isGenerated: false,
+        },
+        specificationLockedAt: null, specificationLockReason: null,
+        createdAt: sourceCreatedAt.toISOString(), updatedAt: sourceUpdatedAt.toISOString(), deletedAt: null,
+      } },
+    });
+    for (const [sourceMode, obtainedAt, value] of [
+      ['benchmark', '2026-10-23T00:00:00.000Z', 0.9],
+      ['harness', '2026-10-22T00:00:00.000Z', 0.7],
+      ['harness', '2026-10-21T00:00:00.000Z', 0.6],
+    ] as const) {
+      await request(app.getHttpServer()).post('/api/metrics/results')
+        .set('Origin', E2E_ORIGIN).set('Cookie', adminCookie)
+        .send({ testId, metricId, modelId, value, sourceMode, obtainedAt }).expect(201);
+    }
+    const [test] = await app.get(CatalogTestProjectionHydrator).hydrate([testId], BenchmarkTestReadScope.Public);
+    expect(test.scores).toHaveLength(2);
+    expect(test.scores.filter((score) => 'benchmark' === score.sourceMode))
+      .toEqual([expect.objectContaining({ modelId, metricId, score: 0.9 })]);
+    expect(test.scores.filter((score) => 'harness' === score.sourceMode))
+      .toEqual([expect.objectContaining({ modelId, metricId, score: 0.7 })]);
   });
 
   it('serializes concurrent first results and queues exactly one lock command', async () => {
