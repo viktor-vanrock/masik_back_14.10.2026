@@ -46,6 +46,8 @@ model Conversation {
 
   @@index([userId])
   @@index([userId, isArchived])
+  @@index([userId, isArchived, pinnedDate(sort: Desc)])
+  @@index([userId, isArchived, updatedAt(sort: Desc)])
   @@map("conversations")
 }
 

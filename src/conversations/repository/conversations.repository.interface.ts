@@ -34,7 +34,12 @@ export abstract class IConversationsRepository {
     data: Conversation[];
     total: number;
     pageSize: number;
-    archived: Conversation[];
+  }>;
+
+  abstract findArchived(page: number, userId: string): Promise<{
+    data: Conversation[];
+    total: number;
+    pageSize: number;
   }>;
 
   abstract findByIdWithMessages(

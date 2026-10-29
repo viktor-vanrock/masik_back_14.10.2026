@@ -75,7 +75,6 @@ describe('ConversationsRepository', () => {
       data: [{ id: 'history' }],
       total: 41,
       pageSize: 20,
-      archived: [],
     });
     expect(conversation.findMany).toHaveBeenCalledTimes(1);
     expect(conversation.findMany).toHaveBeenCalledWith({
@@ -89,20 +88,34 @@ describe('ConversationsRepository', () => {
     });
   });
 
-  it('returns every active pin and archived chat with the first history page', async () => {
+  it('returns every active pin with the first history page', async () => {
     conversation.findMany
       .mockResolvedValueOnce([{ id: 'history' }])
-      .mockResolvedValueOnce([{ id: 'pin' }])
-      .mockResolvedValueOnce([{ id: 'archive' }]);
+      .mockResolvedValueOnce([{ id: 'pin' }]);
     conversation.count.mockResolvedValue(21);
     await expect(repository.findSidebar(1, 'owner-id')).resolves.toEqual({
       pinned: [{ id: 'pin' }], data: [{ id: 'history' }], total: 21,
-      pageSize: 20, archived: [{ id: 'archive' }],
+      pageSize: 20,
     });
     expect(conversation.findMany).toHaveBeenCalledWith({
       where: { userId: 'owner-id', isArchived: false, pinnedDate: { not: null } },
       orderBy: [{ pinnedDate: 'desc' }, { id: 'desc' }],
     });
+  });
+
+  it('paginates archived chats for the owner', async () => {
+    conversation.findMany.mockResolvedValue([{ id: 'archive' }]);
+    conversation.count.mockResolvedValue(25);
+    await expect(repository.findArchived(2, 'owner-id')).resolves.toEqual({
+      data: [{ id: 'archive' }], total: 25, pageSize: 20,
+    });
+    expect(conversation.findMany).toHaveBeenCalledWith({
+      where: { userId: 'owner-id', isArchived: true },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      skip: 20,
+      take: 20,
+    });
+    expect(conversation.count).toHaveBeenCalledWith({ where: { userId: 'owner-id', isArchived: true } });
   });
 
   it('queries conversation details by both id and owner', async () => {

@@ -151,6 +151,10 @@ export class ConversationsService implements OnModuleDestroy {
     return this.repository.findSidebar(page, user.id);
   }
 
+  async findArchived(page: number, user: RequestUser) {
+    return this.repository.findArchived(page, user.id);
+  }
+
   async findByIdWithMessages(
     id: string,
     user: RequestUser
@@ -200,7 +204,14 @@ export class ConversationsService implements OnModuleDestroy {
     const updateData: { title?: string; isArchived?: boolean; pinnedDate?: Date | null } = {};
     if (data.title !== undefined) updateData.title = data.title;
     if (data.isArchived !== undefined) updateData.isArchived = data.isArchived;
-    if (data.isPinned !== undefined) updateData.pinnedDate = data.isPinned ? new Date() : null;
+    if (true === data.isPinned && !conversation.pinnedDate) updateData.pinnedDate = new Date();
+    if (false === data.isPinned && conversation.pinnedDate) updateData.pinnedDate = null;
+
+    if (0 === Object.keys(updateData).length) {
+      const { agentContext, ...rest } = conversation;
+      void agentContext;
+      return rest;
+    }
 
     try {
       const updated = await this.repository.update(id, user.id, updateData);

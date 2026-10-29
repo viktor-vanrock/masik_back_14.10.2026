@@ -19,6 +19,7 @@ describe('ConversationsService recommendation/interviewer boundary', () => {
     createConversation: jest.fn(),
     findAll: jest.fn(),
     findSidebar: jest.fn(),
+    findArchived: jest.fn(),
     findById: jest.fn(),
     findByIdUnsafe: jest.fn(),
     findByIdWithMessages: jest.fn(),
@@ -88,6 +89,16 @@ describe('ConversationsService recommendation/interviewer boundary', () => {
       expect(repository.update).toHaveBeenCalledWith(conversation.id, actor.id, { pinnedDate: expect.any(Date) });
     });
 
+    it('keeps the first pin date when pinning an already pinned conversation again', async () => {
+      const pinnedDate = new Date('2026-10-29T12:00:00.000Z');
+      const conversation = conversationRecord({ pinnedDate });
+      repository.findByIdUnsafe.mockResolvedValue(conversation);
+
+      await expect(service.updateConversation(conversation.id, actor, { isPinned: true }))
+        .resolves.toMatchObject({ pinnedDate });
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
     it('clears the pin date when the owner unpins a conversation', async () => {
       const conversation = conversationRecord({ pinnedDate: new Date('2026-10-29T12:00:00.000Z') });
       repository.findByIdUnsafe.mockResolvedValue(conversation);
@@ -119,6 +130,22 @@ describe('ConversationsService recommendation/interviewer boundary', () => {
       await expect(service.updateConversation(conversation.id, actor, { title: 'Updated' }))
         .rejects.toThrow(`Conversation "${conversation.id}" was not found`);
     });
+  });
+
+  it('delegates sidebar pages for the authenticated owner', async () => {
+    const actor = { id: 'user-id', username: 'user', role: Role.User };
+    const page = { pinned: [], data: [], total: 0, pageSize: 20 };
+    repository.findSidebar.mockResolvedValue(page);
+    await expect(service.findSidebar(2, actor)).resolves.toEqual(page);
+    expect(repository.findSidebar).toHaveBeenCalledWith(2, actor.id);
+  });
+
+  it('delegates archive pages for the authenticated owner', async () => {
+    const actor = { id: 'user-id', username: 'user', role: Role.User };
+    const page = { data: [], total: 0, pageSize: 20 };
+    repository.findArchived.mockResolvedValue(page);
+    await expect(service.findArchived(2, actor)).resolves.toEqual(page);
+    expect(repository.findArchived).toHaveBeenCalledWith(2, actor.id);
   });
 
   it('scopes ordinary HTTP list reads to the authenticated owner', async () => {
