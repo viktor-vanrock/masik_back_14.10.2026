@@ -1,17 +1,28 @@
-import { IsBoolean, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsString, MaxLength, ValidateBy, ValidateIf } from 'class-validator';
 
 export class UpdateConversationDto {
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @MaxLength(255)
   title?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsBoolean()
   isArchived?: boolean;
 
-  /** Хотя бы одно поле должно быть заполнено. */
-  @ValidateIf((o) => o.title === undefined && o.isArchived === undefined)
-  @IsString({ message: 'At least one of title or isArchived must be provided' })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsBoolean()
+  isPinned?: boolean;
+
+  @ValidateBy({
+    name: 'hasConversationUpdate',
+    validator: {
+      validate: (_value, args) => {
+        const dto = args?.object as UpdateConversationDto | undefined;
+        return dto !== undefined && (dto.title !== undefined || dto.isArchived !== undefined || dto.isPinned !== undefined);
+      },
+      defaultMessage: () => 'At least one of title, isArchived or isPinned must be provided',
+    },
+  })
   readonly _atLeastOne?: never;
 }
