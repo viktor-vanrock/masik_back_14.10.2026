@@ -76,6 +76,7 @@ export type AgentRecommendationsContent = {
 export type AgentResultContent = {
   kind: 'result';
   label: string;
+  resultKey?: 'mock_draft_ready';
   /**
    * Заполняется только если Interviewer действительно создал сущность в
    * Catalogue. Для текстового ТЗ/черновика фиктивный ID не нужен.

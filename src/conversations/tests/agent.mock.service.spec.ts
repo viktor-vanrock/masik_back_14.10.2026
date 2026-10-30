@@ -50,6 +50,7 @@ describe('AgentMockService create_new workflow', () => {
       isFinal: true,
       content: {
         label: 'Черновик нового бенчмарка сформирован (mock)',
+        resultKey: 'mock_draft_ready',
       },
     });
     expect(received).not.toEqual(

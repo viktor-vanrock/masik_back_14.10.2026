@@ -1,0 +1,16 @@
+model ContactRequest {
+  id             String       @id @default(uuid()) @db.Uuid
+  publicNumber   String       @unique @map("public_number") @db.VarChar(48)
+  chatId         String       @map("chat_id") @db.Uuid
+  chat           Conversation @relation(fields: [chatId], references: [id], onDelete: Restrict)
+  fullName       String       @map("full_name") @db.VarChar(100)
+  email          String       @db.VarChar(254)
+  consent        Boolean
+  consentAt      DateTime     @map("consent_at") @db.Timestamptz(6)
+  consentVersion String       @map("consent_version") @db.VarChar(80)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([chatId])
+  @@map("contact_requests")
+}

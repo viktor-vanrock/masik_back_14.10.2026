@@ -17,6 +17,7 @@ import embeddingConfig from '@/configs/embedding.config';
 import kafkaConfig from '@/configs/kafka.config';
 import recommendationConfig from '@/configs/recommendation.config';
 import vaultConfig from '@/configs/vault.config';
+import { ContactRequestsModule } from '@/contact-requests/contact-requests.module';
 import { ConversationsModule } from '@/conversations/conversations.module';
 import { GenerationModule } from '@/generation/generation.module';
 import { HealthModule } from '@/health/health.module';
@@ -56,6 +57,7 @@ import { ExternalApiModule } from './external-api/external-api.module';
     HealthModule,
     LeaderboardBoardsModule,
     ConversationsModule,
+    ContactRequestsModule,
     GenerationModule,
   ],
   controllers: [AppController],
