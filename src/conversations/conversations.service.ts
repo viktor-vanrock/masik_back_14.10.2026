@@ -644,6 +644,7 @@ export class ConversationsService implements OnModuleDestroy {
               ? { testId: payload.content.testId }
               : {}),
             status: payload.content.status,
+            ...(payload.content.resultKey ? { resultKey: payload.content.resultKey } : {}),
             ...(payload.content.generationJobId
               ? { generationJobId: payload.content.generationJobId }
               : {}),
@@ -757,6 +758,7 @@ export class ConversationsService implements OnModuleDestroy {
         testId?: string;
         benchmarkId?: string;
         status?: AgentResultContent['status'];
+        resultKey?: AgentResultContent['resultKey'];
         generationJobId?: string;
       };
       const testId = opts.testId ?? opts.benchmarkId;
@@ -775,6 +777,7 @@ export class ConversationsService implements OnModuleDestroy {
           ...(testId ? { testId } : {}),
           ...(opts.generationJobId ? { generationJobId: opts.generationJobId } : {}),
           status: opts.status ?? 'done',
+          ...(opts.resultKey ? { resultKey: opts.resultKey } : {}),
         },
       };
     }

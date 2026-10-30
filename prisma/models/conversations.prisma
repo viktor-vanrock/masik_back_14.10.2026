@@ -43,6 +43,7 @@ model Conversation {
   recommendationRequests RecommendationRequest[]
   hypothesisGenerations  HypothesisGeneration[]
   catalogSubmission      CatalogEntry?           @relation("CatalogEntrySourceConversation")
+  contactRequests         ContactRequest[]
 
   @@index([userId])
   @@index([userId, isArchived])

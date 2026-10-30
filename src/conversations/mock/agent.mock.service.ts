@@ -416,6 +416,7 @@ export class AgentMockService implements IAgentService {
       content: {
         kind: 'result',
         label: 'Черновик нового бенчмарка сформирован (mock)',
+        resultKey: 'mock_draft_ready',
         status: 'done',
       },
     };
