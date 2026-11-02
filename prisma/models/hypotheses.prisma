@@ -1,0 +1,41 @@
+enum HypothesisGenerationStatus {
+  pending
+  completed
+  failed
+}
+
+model HypothesisGeneration {
+  id String @id @default(uuid()) @db.Uuid
+
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Hypotheses are generated for a concrete BenchmarkTest.
+  testId        String @map("test_id") @db.VarChar(160)
+  attemptNumber Int    @map("attempt_number")
+
+  status HypothesisGenerationStatus @default(pending)
+
+  hypotheses Hypothesis[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([conversationId, attemptNumber])
+  @@index([conversationId])
+  @@map("hypothesis_generations")
+}
+
+model Hypothesis {
+  id String @id @default(uuid()) @db.Uuid
+
+  generationId String               @map("generation_id") @db.Uuid
+  generation   HypothesisGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+
+  content String @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([generationId])
+  @@map("hypotheses")
+}

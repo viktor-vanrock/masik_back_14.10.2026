@@ -1,0 +1,35 @@
+enum AnalyticsEventType {
+  benchmark_view
+  benchmark_test_view
+  catalog_search
+  filter_usage
+}
+
+model AnalyticsEvent {
+  id String @id @default(uuid()) @db.Uuid
+
+  type AnalyticsEventType
+
+  // External identifiers owned by benchmark-service. Analytics keeps them as
+  // dimensions, not as cross-service foreign keys.
+  benchmarkId String? @map("benchmark_id") @db.VarChar(160)
+
+  benchmarkTestId String? @map("benchmark_test_id") @db.VarChar(160)
+
+  userId        String? @map("user_id") @db.VarChar(160)
+  sessionIdHash String? @map("session_id_hash") @db.VarChar(64)
+  ipHash        String? @map("ip_hash") @db.VarChar(64)
+  userAgent     String? @map("user_agent") @db.VarChar(1000)
+
+  metadata Json @default("{}") @db.JsonB
+
+  eventDate DateTime @map("event_date") @db.Date
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([type, createdAt])
+  @@index([benchmarkId, type, createdAt])
+  @@index([benchmarkTestId, type, createdAt])
+  @@index([eventDate])
+  @@index([userId])
+  @@map("analytics_events")
+}

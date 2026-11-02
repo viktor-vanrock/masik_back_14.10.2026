@@ -1,0 +1,20 @@
+model LeaderboardBoard {
+  id          String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String? @map("user_id") @db.Uuid
+  user        User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  isPublic  Boolean @default(false) @map("is_public")
+  systemKey String? @unique @map("system_key") @db.VarChar(64)
+
+  name        String  @db.VarChar(80)
+  description String? @db.VarChar(240)
+  modelIds      String[] @default([]) @map("model_ids") @db.VarChar(160)
+  benchmarkIds  String[] @default([]) @map("benchmark_ids") @db.VarChar(160)
+  architectures String[] @default([]) @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("leaderboard_boards")
+}

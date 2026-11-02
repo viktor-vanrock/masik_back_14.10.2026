@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "requirements": {
+    "goal": "Проверить фактические знания модели о налогах",
+    "scope": "Все налоговые темы",
+    "input_format": "Вопрос с вариантами",
+    "output_format": "4 варианта, один правильный",
+    "language": "русский",
+    "difficulty": "средний",
+    "evaluation": "Процент правильных ответов",
+    "task_count": "2"
+  },
+  "prepared_brief": {
+    "schema_version": "1.0",
+    "requirements": {
+      "goal": "Проверить фактические знания модели о налогах",
+      "scope": "Все налоговые темы",
+      "input_format": "Вопрос с вариантами",
+      "output_format": "4 варианта, один правильный",
+      "language": "русский",
+      "difficulty": "средний",
+      "evaluation": "Процент правильных ответов",
+      "task_count": "2"
+    },
+    "benchmark_name": null,
+    "brief": {
+      "schema_version": "1.0",
+      "decision": {
+        "type": "find_weaknesses"
+      },
+      "evaluation_target": {
+        "type": "model"
+      },
+      "task_context": {
+        "real_world_tasks": "Проверка фактических знаний модели о налогах",
+        "required_scenarios": [
+          {
+            "id": "45238317-443d-5b36-9746-39c24fdcc71f",
+            "text": "Все налоговые темы"
+          }
+        ]
+      },
+      "quality_requirements": {
+        "critical_failures": [
+          {
+            "id": "f73efa4e-08d3-56c8-8f77-a7161d520575",
+            "text": "Неверный ответ модели"
+          }
+        ]
+      },
+      "taxonomy": {
+        "macro_group_codes": [
+          "reasoning"
+        ],
+        "knowledge_level": "L2"
+      },
+      "test": {
+        "input": {
+          "modalities": [
+            "text"
+          ]
+        },
+        "output": {
+          "modalities": [
+            "text"
+          ]
+        },
+        "languages": [
+          "ru"
+        ],
+        "output_format": "mcqa",
+        "output_format_details": {
+          "selection_mode": "single",
+          "option_count": 4
+        },
+        "interaction_mode": "single_turn",
+        "difficulty": "university",
+        "evaluation": {
+          "methods": [
+            "exact_match"
+          ],
+          "metric_codes": [
+            "accuracy"
+          ]
+        }
+      }
+    },
+    "num_tasks": 2,
+    "status": "ready",
+    "revision": "10feaa1363532a8fbc2c95c8c8b9225c1b23a6abf3bdb9cf4d5f480abf80bf23"
+  }
+}

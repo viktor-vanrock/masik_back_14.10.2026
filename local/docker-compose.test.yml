@@ -1,0 +1,16 @@
+services:
+  db-test:
+    image: pgvector/pgvector:0.8.1-pg16
+    environment:
+      POSTGRES_DB: benchmark_catalog_test
+      POSTGRES_USER: benchmark_catalog_test
+      POSTGRES_PASSWORD: benchmark_catalog_test
+    ports:
+      - '127.0.0.1:${BENCHMARK_TEST_DB_PORT:-55432}:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U benchmark_catalog_test -d benchmark_catalog_test']
+      interval: 1s
+      timeout: 3s
+      retries: 30

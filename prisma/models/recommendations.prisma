@@ -1,0 +1,89 @@
+enum RecommendationStatus {
+  pending
+  selected
+  rejected
+}
+
+model Recommendation {
+  id String @id @default(uuid()) @db.Uuid
+
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Recommendation always points to a BenchmarkTest, never to a Benchmark suite.
+  testId String @map("test_id") @db.VarChar(160)
+
+  status RecommendationStatus @default(pending)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([conversationId, testId])
+  @@index([conversationId])
+  @@map("recommendations")
+}
+
+enum RecommendationRequestStatus {
+  // Запрос сохранён и ожидает прямые embedder/pgvector/reranker вызовы Catalogue.
+  pending
+
+  // Catalogue успешно сохранил результат.
+  // Пустой список рекомендаций тоже считается completed.
+  completed
+
+  // Поиск не удалось выполнить (например, недоступен embedder).
+  failed
+}
+
+model RecommendationRequest {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Catalogue связывает запрос с conversation только внутри своей БД.
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  query String @db.Text
+  topK  Int    @default(1) @map("top_k")
+
+  status RecommendationRequestStatus @default(pending)
+
+  /**
+   * Поля оставлены для совместимости со схемой. В синхронном HTTP workflow
+   * всегда записывается одна попытка; embedder делает свои короткие HTTP retry.
+   */
+  attemptCount Int       @default(1) @map("attempt_count")
+  maxAttempts  Int       @default(3) @map("max_attempts")
+  nextRetryAt  DateTime? @map("next_retry_at") @db.Timestamptz(6)
+
+  retrievalVersion String? @map("retrieval_version") @db.VarChar(500)
+
+  /**
+   * Снимок кандидатов, найденных pgvector и отправленных прямому reranker API.
+   */
+  candidatePayload Json? @map("candidate_payload") @db.JsonB
+
+  rerankerVersion     String? @map("reranker_version") @db.VarChar(500)
+  retrievalDurationMs Int?    @map("retrieval_duration_ms")
+
+  /**
+   * Сохраняем проверенный итоговый список:
+   * testId, rank, retrieval score, rerankScore и sourceUpdatedAt.
+   * Отдельные Recommendation позже создадим для действий
+   * пользователя select/reject.
+   */
+  resultPayload Json? @map("result_payload") @db.JsonB
+
+  errorCode    String?  @map("error_code") @db.VarChar(120)
+  errorMessage String?  @map("error_message") @db.Text
+  retryable    Boolean?
+
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([conversationId, createdAt])
+  @@index([status, createdAt])
+  @@index([status, nextRetryAt])
+  @@map("recommendation_requests")
+}
