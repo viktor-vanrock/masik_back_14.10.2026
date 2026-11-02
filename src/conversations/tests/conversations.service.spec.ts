@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { AgentMessageType } from '@/common/enums/agentMessageType.enum';
 import { Role } from '@/common/enums/role.enum';
 import {
@@ -12,6 +13,7 @@ import { HypothesesService } from '@/hypotheses/hypotheses.service';
 import { RecommendationRequestsService } from '@/recommendations/recommendation-requests.service';
 import { RecommendationsService } from '@/recommendations/recommendations.service';
 import { ConversationsService } from '../conversations.service';
+import { AgentMockService } from '../mock/agent.mock.service';
 import type { AgentMessagePayload } from '../types';
 
 describe('ConversationsService recommendation/interviewer boundary', () => {
@@ -256,6 +258,22 @@ describe('ConversationsService recommendation/interviewer boundary', () => {
         .rejects.toThrow('Conversation "foreign-id" was not found');
     }
   );
+
+  it('exposes the saved mock result as ready only for local demo conversations', async () => {
+    const conversation = conversationRecord();
+    const mockService = new ConversationsService(repository, new AgentMockService(), recommendationRequests,
+      hypotheses, recommendations, new ConfigService({ nodeEnv: 'dev' }));
+    const messages = [{ id: 'result-id', role: 'agent', kind: 'result', content: 'mock',
+      options: { resultKey: 'mock_draft_ready', status: 'done' } }];
+    repository.findByIdWithMessages.mockResolvedValue({ ...conversation, messages, recommendations: [], recommendationRequests: [] });
+    const actor = { id: conversation.userId, username: 'demo', role: Role.Demo };
+    repository.getAgentContext.mockResolvedValueOnce({ agentContext: null, executionMode: 'prepare_only' })
+      .mockResolvedValueOnce({ agentContext: null, executionMode: 'execute' });
+    await expect(mockService.findByIdWithMessages(conversation.id, actor)).resolves.toMatchObject({
+      demoRequest: { status: 'ready', revision: 'result-id' },
+    });
+    await expect(mockService.findByIdWithMessages(conversation.id, actor)).resolves.not.toHaveProperty('demoRequest');
+  });
 
   it('connects the conversational Interviewer for a fresh conversation', async () => {
     const conversation = conversationRecord();

@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { ConflictException, ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { lockConversation } from '@/conversations/conversation-access';
 import { presentDemoRequest } from '@/conversations/demo-request';
 import { Prisma } from '@/generated/prisma/client';
@@ -12,7 +13,39 @@ export const CONTACT_CONSENT_VERSION = 'aij-marketing-consent-2026-02';
 
 @Injectable()
 export class ContactRequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService = new ConfigService()) {}
+
+  async list(userId: string, cursor?: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (user?.role !== 'SUPERUSER' && user?.role !== 'ADMIN') throw new ForbiddenException();
+
+    const anchor = cursor ? await this.prisma.contactRequest.findUnique({
+      where: { id: cursor }, select: { id: true },
+    }) : null;
+    if (cursor && !anchor) throw new BadRequestException('Invalid cursor');
+    const rows = await this.prisma.contactRequest.findMany({
+      ...(anchor ? { cursor: { id: anchor.id }, skip: 1 } : {}),
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 21,
+      select: { id: true, publicNumber: true, chatId: true, fullName: true, email: true,
+        consent: true, consentAt: true, consentVersion: true, createdAt: true, materialSnapshot: true,
+        chat: { select: { title: true, userId: true, isDeleted: true } } },
+    });
+    const page = rows.slice(0, 20);
+    return {
+      data: page.map(({ id, materialSnapshot, chat, ...item }) => {
+        void id;
+        const snapshot = materialSnapshot as Record<string, unknown> | null;
+        const prepared = snapshot?.preparedBrief as Record<string, unknown> | undefined;
+        const raw = prepared?.requirements;
+        const requirements = raw && 'object' === typeof raw && !Array.isArray(raw)
+          ? Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, string] => 'string' === typeof entry[1]))
+          : null;
+        return { ...item, chatTitle: chat.title, chatAvailable: !chat.isDeleted && chat.userId === userId, requirements };
+      }),
+      nextCursor: rows.length > 20 ? page[page.length - 1].id : null,
+    };
+  }
 
   async create(input: CreateContactRequestDto, ownerId: string, key: string): Promise<{ publicNumber: string }> {
     const idempotencyKey = contactIdempotencyKey(key);
@@ -28,7 +61,11 @@ export class ContactRequestsService {
           const chat = await lockConversation(tx, input.chatId, ownerId);
           if ('DEMO' !== chat.role) throw new ForbiddenException('Contacts are available only for DEMO accounts');
           const prepared = presentDemoRequest(chat.agentContext);
-          if (!prepared && 'completed' !== chat.status) throw new ConflictException('The request is not ready for contacts');
+          const mockReady = !prepared && 'completed' !== chat.status &&
+            'mock' === this.config.get<string>('agent.mode') && 'dev' === this.config.get<string>('nodeEnv')
+            ? await tx.message.findFirst({ where: { conversationId: chat.id, role: 'agent', kind: 'result',
+              options: { path: ['resultKey'], equals: 'mock_draft_ready' } }, select: { id: true } }) : null;
+          if (!prepared && !mockReady && 'completed' !== chat.status) throw new ConflictException('The request is not ready for contacts');
           const existing = await tx.contactRequest.findUnique({
             where: { requestOwnerId_idempotencyKey: { requestOwnerId: ownerId, idempotencyKey } },
             select: { publicNumber: true, requestHash: true },
@@ -37,7 +74,7 @@ export class ContactRequestsService {
           const context = chat.agentContext as Prisma.JsonObject | null;
           const materialSnapshot = prepared
             ? { kind: 'prepared_brief', revision: prepared.revision, preparedBrief: context!.prepared_brief! }
-            : { kind: 'completed_chat', conversationId: chat.id };
+            : { kind: mockReady ? 'mock_draft' : 'completed_chat', conversationId: chat.id };
           return tx.contactRequest.create({
             data: {
               publicNumber,

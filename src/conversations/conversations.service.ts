@@ -9,6 +9,7 @@ import {
   OnModuleDestroy,
   PayloadTooLargeException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PaginationDto } from '@/common/dtos/paginationDto.dto';
 import { AgentMessageType } from '@/common/enums/agentMessageType.enum';
 import { InfiniteDataResponseType } from '@/common/types/infiniteDataResponse.type';
@@ -32,6 +33,7 @@ import { RecommendationRequestsService } from '@/recommendations/recommendation-
 import { RecommendationsService } from '@/recommendations/recommendations.service';
 import { IAgentService } from './agent/agent.service.interface';
 import { DemoRequest, presentDemoRequest } from './demo-request';
+import { AgentMockService } from './mock/agent.mock.service';
 import { CreateMessageInput, IConversationsRepository } from './repository/conversations.repository.interface';
 import { ConversationResponseState, latestResponseState, messageResponseState } from './response-state';
 import {
@@ -86,7 +88,8 @@ export class ConversationsService implements OnModuleDestroy {
     private readonly agent: IAgentService,
     private readonly recommendationRequestsService: RecommendationRequestsService,
     private readonly hypothesesService: HypothesesService,
-    private readonly recommendationsService: RecommendationsService
+    private readonly recommendationsService: RecommendationsService,
+    private readonly config: ConfigService = new ConfigService()
   ) {}
 
   async requestRecommendations(
@@ -172,8 +175,13 @@ export class ConversationsService implements OnModuleDestroy {
       throw new NotFoundException(`Conversation "${id}" was not found`);
     }
     const prepared = presentDemoRequest(conversation.agentContext);
-    const demoRequest = prepared && 'prepare_only' === (await this.repository.getAgentContext(id))?.executionMode
-      ? prepared : null;
+    const mockResult = this.agent instanceof AgentMockService && 'dev' === this.config.get<string>('nodeEnv') && conversation.messages.find(message =>
+      'agent' === message.role && 'result' === message.kind &&
+      message.options && !Array.isArray(message.options) && 'object' === typeof message.options &&
+      'mock_draft_ready' === message.options.resultKey);
+    const candidate = prepared ?? (mockResult ? { status: 'ready' as const, revision: mockResult.id } : null);
+    const demoRequest = candidate && 'prepare_only' === (await this.repository.getAgentContext(id))?.executionMode
+      ? candidate : null;
     return {
       ...conversation,
       ...(demoRequest ? { demoRequest } : {}),

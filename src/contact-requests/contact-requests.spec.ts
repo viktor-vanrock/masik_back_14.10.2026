@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { Prisma } from '@/generated/prisma/client';
@@ -53,6 +54,23 @@ describe('contact requests', () => {
     }));
     expect(createRequest.mock.calls[0][0].data).not.toHaveProperty('consentAt');
     expect(createRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('accepts a saved mock result only in local mock mode', async () => {
+    const create = jest.fn().mockResolvedValue({ publicNumber: 'AIJ-MOCK' });
+    const findMock = jest.fn().mockResolvedValue({ id: 'saved-result' });
+    const tx = { $queryRaw: jest.fn().mockResolvedValue([{ id: chatId, role: 'DEMO', status: 'active', agentContext: null }]),
+      message: { findFirst: findMock }, contactRequest: { create, findUnique: jest.fn().mockResolvedValue(null) } };
+    const prisma = { $transaction: (callback: (client: typeof tx) => unknown) => callback(tx) } as unknown as PrismaService;
+    const local = new ContactRequestsService(prisma, new ConfigService({ agent: { mode: 'mock' }, nodeEnv: 'dev' }));
+    const inputDto = plainToInstance(CreateContactRequestDto, input);
+    await expect(local.create(inputDto, 'owner-id', randomUUID())).resolves.toEqual({ publicNumber: 'AIJ-MOCK' });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      materialSnapshot: { kind: 'mock_draft', conversationId: chatId },
+    }) }));
+    const production = new ContactRequestsService(prisma, new ConfigService({ agent: { mode: 'ws' }, nodeEnv: 'production' }));
+    await expect(production.create(inputDto, 'owner-id', randomUUID())).rejects.toMatchObject({ status: 409 });
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('does not save contacts for an unknown or foreign chat', async () => {

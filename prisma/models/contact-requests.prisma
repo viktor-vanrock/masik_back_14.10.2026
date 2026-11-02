@@ -16,6 +16,7 @@ model ContactRequest {
   updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([chatId])
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
   @@unique([requestOwnerId, idempotencyKey])
   @@map("contact_requests")
 }

@@ -10,6 +10,7 @@ import request from 'supertest';
 import { JwtAuthGuard } from '@/auth/jwt/jwt-auth.guard';
 import { JwtStrategy } from '@/auth/jwt/jwt.strategy';
 import { OriginCsrfGuard } from '@/common/guards/origin-csrf.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
 import { ContactRequestsRateLimitGuard } from './contact-requests-rate-limit.guard';
 import { ContactRequestsController } from './contact-requests.controller';
 import { ContactRequestsService } from './contact-requests.service';
@@ -17,7 +18,7 @@ import { DemoContactsController } from './demo-contacts.controller';
 
 describe('POST /api/contact-requests', () => {
   let app: NestExpressApplication;
-  const service = { create: jest.fn() };
+  const service = { create: jest.fn(), list: jest.fn() };
   const config: Record<string, unknown> = {
     jwtAccessSecret: 'contact-request-test-secret', nodeEnv: 'dev', trustedOrigins: [],
   };
@@ -40,6 +41,7 @@ describe('POST /api/contact-requests', () => {
         ContactRequestsRateLimitGuard,
         { provide: APP_GUARD, useClass: OriginCsrfGuard },
         { provide: APP_GUARD, useClass: JwtAuthGuard },
+        { provide: APP_GUARD, useClass: RolesGuard },
       ],
     }).compile();
     app = module.createNestApplication<NestExpressApplication>();
@@ -49,6 +51,26 @@ describe('POST /api/contact-requests', () => {
   });
   afterAll(async () => { await app?.close(); });
   beforeEach(() => { jest.clearAllMocks(); service.create.mockResolvedValue({ publicNumber: 'AIJ-2026-ABC123' }); });
+
+  it('permits administrators and superusers to list contacts and disables response caching', async () => {
+    await request(app.getHttpServer()).get('/api/contact-requests').expect(401);
+    for (const role of ['USER', 'DEMO']) {
+      const token = jwt.sign({ sub: 'owner-id', username: 'owner', role });
+      await request(app.getHttpServer()).get('/api/contact-requests').set('Cookie', `access_token=${token}`).expect(403);
+    }
+    expect(service.list).not.toHaveBeenCalled();
+    service.list.mockResolvedValue({ data: [], nextCursor: null });
+    for (const role of ['ADMIN', 'SUPERUSER']) {
+      const token = jwt.sign({ sub: 'admin-id', username: 'admin', role });
+      const response = await request(app.getHttpServer()).get('/api/contact-requests')
+        .set('Cookie', `access_token=${token}`).expect(200);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(service.list).toHaveBeenCalledWith('admin-id', undefined);
+    }
+    const token = jwt.sign({ sub: 'super-id', username: 'super', role: 'SUPERUSER' });
+    await request(app.getHttpServer()).get('/api/contact-requests?cursor=invalid')
+      .set('Cookie', `access_token=${token}`).expect(400);
+  });
 
   it('requires login and a permitted browser origin', async () => {
     await request(app.getHttpServer()).post('/api/contact-requests').set('Idempotency-Key', key)
